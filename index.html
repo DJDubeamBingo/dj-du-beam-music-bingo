@@ -37,13 +37,15 @@ import {getAuth,onAuthStateChanged,signInAnonymously} from 'https://www.gstatic.
 import {getDatabase,ref,onValue,push,set} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
 const $=id=>document.getElementById(id),GAME='DUBEAM-01';
 let card=[],marks=[],played=[],connected=false,ready=false,round=1,playerName='',db,auth,claimBusy=false,unsubscribeClaim=null;
+
+let activeSongs = window.DUBEAM_SONGS;
 function hash(s){let h=0;for(const c of s)h=(Math.imul(h,31)+c.charCodeAt(0))>>>0;return h}
 function seededShuffle(a,seed){let x=[...a],h=2166136261;for(const c of seed)h=Math.imul(h^c.charCodeAt(0),16777619)>>>0;for(let i=x.length-1;i>0;i--){h=(Math.imul(h,1664525)+1013904223)>>>0;const j=h%(i+1);[x[i],x[j]]=[x[j],x[i]]}return x}
 function note(id,message,error=false){$(id).textContent=message;$(id).className='live-note'+(error?' live-error':'')}
 function render(){const grid=$('grid');grid.replaceChildren();card.forEach((song,i)=>{const cell=document.createElement('button');cell.type='button';cell.className='cell'+(marks[i]?' marked':'')+(i===12?' free':'');cell.textContent=song;cell.addEventListener('click',()=>{if(i!==12){marks[i]=!marks[i];$('result').textContent='';render()}});grid.appendChild(cell)})}
 function cardSeed(){return playerName+'|'+GAME+'|'+round}
 function cardNumber(){return String(hash(cardSeed())%100000).padStart(5,'0')}
-function setCard(){if(!playerName)return;const seed=cardSeed();card=seededShuffle(window.DUBEAM_SONGS,seed).slice(0,24);card.splice(12,0,'⭐ FREE SPACE ⭐');marks=Array(25).fill(false);marks[12]=true;$('playerLine').textContent=playerName+' • '+GAME+' • Round '+round+' • Card #'+cardNumber();$('result').textContent='';if(unsubscribeClaim){unsubscribeClaim();unsubscribeClaim=null}render()}
+function setCard(){if(!playerName)return;const seed=cardSeed();card=seededShuffle(activeSongs,seed).slice(0,24);card.splice(12,0,'⭐ FREE SPACE ⭐');marks=Array(25).fill(false);marks[12]=true;$('playerLine').textContent=playerName+' • '+GAME+' • Round '+round+' • Card #'+cardNumber();$('result').textContent='';if(unsubscribeClaim){unsubscribeClaim();unsubscribeClaim=null}render()}
 function winLines(){const lines=[];for(let r=0;r<5;r++)lines.push([0,1,2,3,4].map(c=>r*5+c));for(let c=0;c<5;c++)lines.push([0,1,2,3,4].map(r=>r*5+c));lines.push([0,6,12,18,24],[4,8,12,16,20]);return lines}
 async function claim(){
  const result=$('result');
