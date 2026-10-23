@@ -3,172 +3,115 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DJ DU BEAM — Host Dashboard (Test)</title>
+<title>DJ DU BEAM — Host Dashboard</title>
 <link rel="stylesheet" href="styles.css">
 <style>
-  .host-field { width:100%; box-sizing:border-box; margin:7px 0; padding:12px; }
-  .host-note { margin:12px 0; overflow-wrap:anywhere; }
-  .host-error { color:#ffb1b1; }
-  .host-ok { color:#a6f0b1; }
-  .host-song { padding:8px; border-bottom:1px solid #65512a; }
-  button:disabled { opacity:.5; cursor:not-allowed; }
+.host-field{width:100%;box-sizing:border-box;margin:7px 0;padding:12px}
+.host-note{margin:12px 0;overflow-wrap:anywhere}
+.host-error{color:#ffb1b1}.host-ok{color:#a6f0b1}
+.host-song{padding:8px;border-bottom:1px solid #65512a}
+button:disabled{opacity:.5;cursor:not-allowed}
 </style>
 </head>
 <body>
 <div class="wrap">
 <img class="logo" src="logo.jpeg" alt="DJ DU BEAM">
 <h1 class="title">HOST DASHBOARD</h1>
-<p class="sub">FIREBASE LIVE SYNC — TEST BUILD</p>
+<p class="sub">FIREBASE LIVE MUSIC BINGO</p>
 <section class="panel" id="loginPanel">
-  <h2>DJ Login</h2>
-  <input class="host-field" id="email" type="email" placeholder="DJ email" autocomplete="username">
-  <input class="host-field" id="password" type="password" placeholder="Password" autocomplete="current-password">
-  <button id="loginBtn" type="button">SIGN IN</button>
-  <div class="host-note" id="loginStatus" role="status">Checking connection…</div>
+<h2>DJ Login</h2>
+<input class="host-field" id="email" type="email" placeholder="DJ email" autocomplete="username">
+<input class="host-field" id="password" type="password" placeholder="Password" autocomplete="current-password">
+<button id="loginBtn" type="button">SIGN IN</button>
+<div class="host-note" id="loginStatus" role="status">Checking connection…</div>
 </section>
 <div id="dashboard" class="hide">
 <section class="panel">
-  <div class="bigcode" id="gameCode">DUBEAM-01</div>
-  <p class="sub">Game 1 • Throwback R&amp;B + Hip-Hop</p>
-  <p class="small">You control this test game. Press NEXT SONG only after playing that track in VirtualDJ.</p>
-  <div class="row">
-    <button id="nextBtn" type="button">▶ NEXT SONG</button>
-    <button id="resetBtn" class="secondary" type="button">↻ RESET PLAYED SONGS</button>
-    <button id="logoutBtn" class="secondary" type="button">SIGN OUT</button>
-  </div>
-  <div class="host-note" id="syncStatus" role="status"></div>
+<div class="bigcode" id="gameCode">DUBEAM-01</div>
+<p class="sub">Game <span id="roundNumber">1</span> • Throwback R&amp;B + Hip-Hop</p>
+<p class="small">Permanent code and join link. Press NEXT SONG after playing that track in VirtualDJ.</p>
+<div class="row">
+<button id="nextBtn" type="button">▶ NEXT SONG</button>
+<button id="newBtn" class="secondary" type="button">✦ NEW GAME</button>
+<button id="logoutBtn" class="secondary" type="button">SIGN OUT</button>
+</div>
+<div class="host-note" id="syncStatus" role="status"></div>
 </section>
 <section class="panel">
-  <h2>Current Song</h2>
-  <div id="current" class="status" style="font-size:24px">Ready to play</div>
+<h2>Current Song</h2>
+<div id="current" class="status" style="font-size:24px">Ready to play</div>
 </section>
 <section class="panel">
-  <h2>Played Songs <span id="count">0</span></h2>
-  <div id="played" class="songlist"></div>
+<h2>Played Songs <span id="count">0</span> / <span id="total">75</span></h2>
+<div id="played" class="songlist"></div>
 </section>
 <section class="panel">
-  <h2>Player QR / Join Link</h2>
-  <input id="joinUrl" class="host-field" readonly>
-  <button id="copyBtn" type="button">COPY JOIN LINK</button>
-  <p class="small">The player website will receive live updates after we update index.html in this test branch.</p>
+<h2>Player Join Link</h2>
+<input id="joinUrl" class="host-field" readonly>
+<button id="copyBtn" type="button">COPY JOIN LINK</button>
+<p class="small">Players use the same link every round.</p>
 </section>
 </div>
 </div>
 <script src="songs.js"></script>
 <script src="config.js"></script>
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { getDatabase, ref, onValue, runTransaction } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
-
-const $ = id => document.getElementById(id);
-const GAME = 'DUBEAM-01';
-// Firebase database rules, not this page, determine who may write game state.
-const songs = window.DUBEAM_SONGS;
-const config = window.DUBEAM_FIREBASE_CONFIG;
-let auth, db, unsubscribe = null, busy = false, currentState = null;
-
-function status(message, error = false) {
-  $('syncStatus').textContent = message;
-  $('syncStatus').className = 'host-note ' + (error ? 'host-error' : 'host-ok');
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import {getDatabase,ref,onValue,runTransaction} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
+const $=id=>document.getElementById(id);
+const GAME='DUBEAM-01';
+const songs=window.DUBEAM_SONGS;
+const config=window.DUBEAM_FIREBASE_CONFIG;
+let auth,db,unsubscribe=null,busy=false,currentState=null;
+function status(message,error=false){$('syncStatus').textContent=message;$('syncStatus').className='host-note '+(error?'host-error':'host-ok')}
+function loginStatus(message,error=false){$('loginStatus').textContent=message;$('loginStatus').className='host-note '+(error?'host-error':'')}
+function draw(value){
+ currentState=value;
+ const played=Array.isArray(value?.played)?value.played:[];
+ $('count').textContent=played.length;
+ $('roundNumber').textContent=Math.max(1,Number(value?.round)||1);
+ $('current').textContent=played.length?played[played.length-1]:'Ready to play';
+ $('played').replaceChildren();
+ [...played].reverse().forEach((song,index)=>{const item=document.createElement('div');item.className='host-song';item.textContent=`${played.length-index}. ${song}`;$('played').appendChild(item)});
+ $('nextBtn').disabled=busy||played.length>=songs.length;
+ $('newBtn').disabled=busy;
 }
-function loginStatus(message, error = false) {
-  $('loginStatus').textContent = message;
-  $('loginStatus').className = 'host-note ' + (error ? 'host-error' : '');
+function shuffledIndexes(length){const indexes=Array.from({length},(_,i)=>i);for(let i=indexes.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[indexes[i],indexes[j]]=[indexes[j],indexes[i]]}return indexes}
+async function updateGame(newGame){
+ if(busy)return;
+ if(newGame&&!confirm('Start a NEW GAME? This will clear played songs and reset player cards for everyone. The game code stays DUBEAM-01.'))return;
+ busy=true;draw(currentState);
+ try{
+  const result=await runTransaction(ref(db,`games/${GAME}/currentSong`),previous=>{
+   const old=previous&&typeof previous==='object'?previous:{};
+   const round=Math.max(1,Number(old.round)||1);
+   if(newGame)return{played:[],order:shuffledIndexes(songs.length),round:round+1,updatedAt:Date.now()};
+   const order=Array.isArray(old.order)&&old.order.length===songs.length?old.order:shuffledIndexes(songs.length);
+   const played=Array.isArray(old.played)?old.played:[];
+   if(played.length>=order.length)return;
+   return{played:[...played,songs[order[played.length]]],order,round,updatedAt:Date.now()};
+  },{applyLocally:false});
+  status(result.committed?(newGame?'New game started! Player cards will refresh after the player-page update.':'Song saved to Firebase.'):'No more songs to play.');
+ }catch(error){status('Firebase write failed: '+error.message,true)}
+ finally{busy=false;draw(currentState)}
 }
-function draw(value) {
-  currentState = value;
-  const played = Array.isArray(value?.played) ? value.played : [];
-  $('count').textContent = played.length;
-  $('current').textContent = played.length ? played[played.length - 1] : 'Ready to play';
-  $('played').replaceChildren();
-  [...played].reverse().forEach((song, index) => {
-    const item = document.createElement('div');
-    item.className = 'host-song';
-    item.textContent = `${played.length - index}. ${song}`;
-    $('played').appendChild(item);
-  });
-  $('nextBtn').disabled = busy || played.length >= songs.length;
-  $('resetBtn').disabled = busy;
+function connect(user){
+ if(unsubscribe){unsubscribe();unsubscribe=null}
+ const authorized=!!user&&!user.isAnonymous;
+ $('loginPanel').classList.toggle('hide',authorized);
+ $('dashboard').classList.toggle('hide',!authorized);
+ if(!authorized){loginStatus(user?'Sign in using your DJ email/password account.':'Sign in with your DJ email and password.',!!user);if(user)signOut(auth).catch(console.error);return}
+ unsubscribe=onValue(ref(db,`games/${GAME}/currentSong`),snap=>{draw(snap.val());status('Connected to Firebase. Ready for live song tracking.')},error=>status('Firebase read failed: '+error.message,true));
 }
-function shuffledIndexes(length) {
-  const indexes = Array.from({length}, (_, i) => i);
-  for (let i = indexes.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [indexes[i], indexes[j]] = [indexes[j], indexes[i]];
-  }
-  return indexes;
-}
-async function updateGame(reset) {
-  if (busy) return;
-  if (reset && !confirm('Reset the played songs for all connected players?')) return;
-  busy = true;
-  draw(currentState);
-  try {
-    const result = await runTransaction(ref(db, `games/${GAME}/currentSong`), previous => {
-      const old = previous && typeof previous === 'object' ? previous : {};
-      if (reset) return { played: [], order: shuffledIndexes(songs.length), updatedAt: Date.now() };
-      const order = Array.isArray(old.order) && old.order.length === songs.length ? old.order : shuffledIndexes(songs.length);
-      const played = Array.isArray(old.played) ? old.played : [];
-      if (played.length >= order.length) return;
-      return { played: [...played, songs[order[played.length]]], order, updatedAt: Date.now() };
-    }, { applyLocally: false });
-    status(result.committed ? (reset ? 'Game reset in Firebase.' : 'Song saved to Firebase.') : 'No more songs to play.');
-  } catch (error) {
-    status('Firebase write failed: ' + error.message, true);
-  } finally {
-    busy = false;
-    draw(currentState);
-  }
-}
-function connect(user) {
-  if (unsubscribe) { unsubscribe(); unsubscribe = null; }
-  const authorized = !!user && !user.isAnonymous;
-  $('loginPanel').classList.toggle('hide', authorized);
-  $('dashboard').classList.toggle('hide', !authorized);
-  if (!authorized) {
-    loginStatus(user ? 'Sign in using your DJ email/password account.' : 'Sign in with your DJ email and password.', !!user);
-    if (user) signOut(auth).catch(console.error);
-    return;
-  }
-  unsubscribe = onValue(ref(db, `games/${GAME}/currentSong`), snap => {
-    draw(snap.val());
-    status('Connected to Firebase. Ready for live song tracking.');
-  }, error => status('Firebase read failed: ' + error.message, true));
-}
-$('loginBtn').addEventListener('click', async () => {
-  $('loginBtn').disabled = true;
-  try {
-    await signInWithEmailAndPassword(auth, $('email').value.trim(), $('password').value);
-    $('password').value = '';
-  } catch (error) {
-    loginStatus('Sign-in failed: ' + error.message, true);
-  } finally { $('loginBtn').disabled = false; }
-});
-$('nextBtn').addEventListener('click', () => updateGame(false));
-$('resetBtn').addEventListener('click', () => updateGame(true));
-$('logoutBtn').addEventListener('click', () => signOut(auth));
-$('copyBtn').addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText($('joinUrl').value); alert('Join link copied.'); }
-  catch { alert('Copy the link from the box.'); }
-});
-const playerURL = new URL(location.href);
-playerURL.pathname = playerURL.pathname.replace(/host\.html$/, 'index.html');
-$('joinUrl').value = playerURL.href;
-if (!config || !Array.isArray(songs) || !songs.length) {
-  loginStatus('Missing Firebase config or songs list. Check config.js and songs.js.', true);
-  $('loginBtn').disabled = true;
-} else {
-  try {
-    const app = initializeApp(config);
-    auth = getAuth(app);
-    db = getDatabase(app);
-    onAuthStateChanged(auth, connect, error => loginStatus('Authentication error: ' + error.message, true));
-  } catch (error) {
-    loginStatus('Firebase setup failed: ' + error.message, true);
-    $('loginBtn').disabled = true;
-  }
-}
+$('loginBtn').addEventListener('click',async()=>{$('loginBtn').disabled=true;try{await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value);$('password').value=''}catch(error){loginStatus('Sign-in failed: '+error.message,true)}finally{$('loginBtn').disabled=false}});
+$('nextBtn').addEventListener('click',()=>updateGame(false));
+$('newBtn').addEventListener('click',()=>updateGame(true));
+$('logoutBtn').addEventListener('click',()=>signOut(auth));
+$('copyBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('joinUrl').value);alert('Join link copied.')}catch{alert('Copy the link from the box.')}});
+const playerURL=new URL(location.href);playerURL.pathname=playerURL.pathname.replace(/host\.html$/,'index.html');playerURL.search='';playerURL.hash='';$('joinUrl').value=playerURL.href;
+if(!config||!Array.isArray(songs)||!songs.length){loginStatus('Missing Firebase config or songs list. Check config.js and songs.js.',true);$('loginBtn').disabled=true}
+else{try{const app=initializeApp(config);auth=getAuth(app);db=getDatabase(app);$('total').textContent=songs.length;onAuthStateChanged(auth,connect,error=>loginStatus('Authentication error: '+error.message,true))}catch(error){loginStatus('Firebase setup failed: '+error.message,true);$('loginBtn').disabled=true}}
 </script>
 </body>
 </html>
