@@ -81,7 +81,19 @@ else{try{
   if(ready)return;ready=true;
   onValue(ref(db,`games/${GAME}/currentSong`),snapshot=>{
    const value=snapshot.val(),nextRound=Math.max(1,Number(value?.round)||1),roundChanged=nextRound!==round;
-   round=nextRound;played=Array.isArray(value?.played)?value.played:[];connected=true;$('joinBtn').disabled=false;
+  
+const nextSongs = Array.isArray(value?.songs) && value.songs.length >= 24
+  ? value.songs
+  : window.DUBEAM_SONGS;
+
+const playlistChanged = JSON.stringify(activeSongs) !== JSON.stringify(nextSongs);
+
+activeSongs = nextSongs;
+round = nextRound;
+played = Array.isArray(value?.played) ? value.played : [];
+connected = true;
+$('joinBtn').disabled = false;
+e;
    note('connection','Connected! Enter your name to join.');
    if(playerName&&roundChanged){setCard();note('liveStatus','NEW GAME! Round '+round+' • Your songs changed and marks were cleared.')}
    else if(playerName){note('liveStatus','Round '+round+' • Live feed connected • '+played.length+' songs played')}
