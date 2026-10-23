@@ -95,7 +95,7 @@ connected = true;
 $('joinBtn').disabled = false;
 
    note('connection','Connected! Enter your name to join.');
-   if(playerName&&roundChanged){setCard();note('liveStatus','NEW GAME! Round '+round+' • Your songs changed and marks were cleared.')}
+  if(playerName&&(roundChanged||playlistChanged)){setCard();note('liveStatus','NEW GAME! Round '+round+' • Your songs changed and marks were cleared.')}
    else if(playerName){note('liveStatus','Round '+round+' • Live feed connected • '+played.length+' songs played')}
   },error=>{connected=false;$('joinBtn').disabled=true;note('connection','Firebase read failed: '+error.message,true);note('liveStatus','Live connection failed: '+error.message,true)});
  },error=>note('connection','Authentication failed: '+error.message,true));
