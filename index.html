@@ -35,7 +35,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInAnonymously} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {getDatabase,ref,onValue,push,set} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
-const $=id=>document.getElementById(id),GAME='DUBEAM-01';
+const $=id=>document.getElementById(id),GAME='DUBEAM-TEST';
 let card=[],marks=[],played=[],connected=false,ready=false,round=1,playerName='',db,auth,claimBusy=false,unsubscribeClaim=null;
 
 let activeSongs = window.DUBEAM_SONGS;
