@@ -1,6 +1,5 @@
-// Paste your Firebase Web App config here. See README.txt.
-window.DUBEAM_FIREBASE_CONFIG ={
-  apiKey: "AIzaSyBQfJ4bLWQe9vhwiVuV8Omg-MIQGitxmJ-k",
+window.DUBEAM_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBQfJ4bLWQe9vhwiVuV8OmgMIQGitxmJ-k",
   authDomain: "dj-du-beam-music-bingo.firebaseapp.com",
   databaseURL: "https://dj-du-beam-music-bingo-default-rtdb.firebaseio.com",
   projectId: "dj-du-beam-music-bingo",
