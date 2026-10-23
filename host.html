@@ -304,6 +304,16 @@ $('loginBtn').addEventListener('click',async()=>{$('loginBtn').disabled=true;try
 
 $('markSongBtn').addEventListener('click', markSelectedSong);
 
+$('songSelector').addEventListener('change', () => {
+  const selector = $('songSelector');
+  const selected = selector.options[selector.selectedIndex];
+
+  $('markSongBtn').disabled =
+    busy || !selected?.value || selected.disabled ||
+    !Array.isArray(currentState?.songs) ||
+    currentState.songs.length < 24;
+});
+
   $('nextBtn').addEventListener('click',()=>updateGame(false));$('newBtn').addEventListener('click',()=>updateGame(true));$('logoutBtn').addEventListener('click',()=>signOut(auth));$('copyBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('joinUrl').value);alert('Join link copied.')}catch{alert('Copy the link from the box.')}});
 const playerURL=new URL(location.href);playerURL.pathname=playerURL.pathname.replace(/host\.html$/,'index.html');playerURL.search='';playerURL.hash='';$('joinUrl').value=playerURL.href;
 if(!config||!Array.isArray(songs)||!songs.length){loginStatus('Missing Firebase config or songs list. Check config.js and songs.js.',true);$('loginBtn').disabled=true}else{try{const app=initializeApp(config);auth=getAuth(app);db=getDatabase(app);$('total').textContent=songs.length;onAuthStateChanged(auth,connect,error=>loginStatus('Authentication error: '+error.message,true))}catch(error){loginStatus('Firebase setup failed: '+error.message,true);$('loginBtn').disabled=true}}
