@@ -139,21 +139,9 @@ async function loadCustomPlaylist() {
 
     customSongs = imported.slice(0, count);
 
-    const selector = $("songSelector");
-    selector.replaceChildren();
+ 
 
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = "Select a song...";
-    selector.appendChild(placeholder);
-
-    customSongs.forEach((song, index) => {
-      const option = document.createElement("option");
-      option.value = String(index);
-      option.textContent = song;
-      selector.appendChild(option);
-    });
-
+  
     statusBox.textContent =
       customSongs.length + " songs loaded successfully!";
 
