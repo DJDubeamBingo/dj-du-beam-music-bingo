@@ -93,7 +93,7 @@ round = nextRound;
 played = Array.isArray(value?.played) ? value.played : [];
 connected = true;
 $('joinBtn').disabled = false;
-e;
+
    note('connection','Connected! Enter your name to join.');
    if(playerName&&roundChanged){setCard();note('liveStatus','NEW GAME! Round '+round+' • Your songs changed and marks were cleared.')}
    else if(playerName){note('liveStatus','Round '+round+' • Live feed connected • '+played.length+' songs played')}
