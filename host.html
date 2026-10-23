@@ -176,7 +176,61 @@ function seededShuffle(a,seed){let x=[...a],h=2166136261;for(const c of seed)h=M
 function winLines(){const lines=[];for(let r=0;r<5;r++)lines.push([0,1,2,3,4].map(c=>r*5+c));for(let c=0;c<5;c++)lines.push([0,1,2,3,4].map(r=>r*5+c));lines.push([0,6,12,18,24],[4,8,12,16,20]);return lines}
 function draw(value){currentState=value;const played=Array.isArray(value?.played)?value.played:[];$('count').textContent=played.length;$('roundNumber').textContent=Math.max(1,Number(value?.round)||1);$('current').textContent=played.length?played[played.length-1]:'Ready to play';$('played').replaceChildren();[...played].reverse().forEach((song,index)=>{const item=document.createElement('div');item.className='host-song';item.textContent=`${played.length-index}. ${song}`;$('played').appendChild(item)});$('nextBtn').disabled=busy||played.length>=songs.length;$('newBtn').disabled=busy;renderClaims();processClaims()}
 function shuffledIndexes(length){const indexes=Array.from({length},(_,i)=>i);for(let i=indexes.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[indexes[i],indexes[j]]=[indexes[j],indexes[i]]}return indexes}
-async function updateGame(newGame){if(busy)return;if(newGame&&!confirm('Start a NEW GAME? This will clear played songs and reset player cards for everyone. The game code stays DUBEAM-01.'))return;busy=true;draw(currentState);try{const result=await runTransaction(ref(db,`games/${GAME}/currentSong`),previous=>{const old=previous&&typeof previous==='object'?previous:{};const round=Math.max(1,Number(old.round)||1);
+
+async function markSelectedSong() {
+  const selectedIndex = Number($('songSelector').value);
+  const selectedValue = $('songSelector').value;
+
+  if (selectedValue === '') {
+    status('Choose a song first.', true);
+    return;
+  }
+
+  if (busy) return;
+
+  busy = true;
+
+  try {
+    const result = await runTransaction(
+      ref(db, `games/${GAME}/currentSong`),
+      previous => {
+        if (!previous || !Array.isArray(previous.songs)) return;
+
+        const gameSongs = previous.songs;
+        const song = gameSongs[selectedIndex];
+
+        if (!song) return;
+
+        const played = Array.isArray(previous.played)
+          ? previous.played
+          : [];
+
+        if (played.includes(song)) return;
+
+        return {
+          ...previous,
+          played: [...played, song],
+          updatedAt: Date.now()
+        };
+      },
+      { applyLocally: false }
+    );
+
+    status(
+      result.committed
+        ? 'Selected song marked as played!'
+        : 'Song already played or no custom game is active.',
+      !result.committed
+    );
+  } catch (error) {
+    status('Unable to mark song: ' + error.message, true);
+  } finally {
+    busy = false;
+    draw(currentState);
+  }
+}
+
+  async function updateGame(newGame){if(busy)return;if(newGame&&!confirm('Start a NEW GAME? This will clear played songs and reset player cards for everyone. The game code stays DUBEAM-01.'))return;busy=true;draw(currentState);try{const result=await runTransaction(ref(db,`games/${GAME}/currentSong`),previous=>{const old=previous&&typeof previous==='object'?previous:{};const round=Math.max(1,Number(old.round)||1);
 if(newGame){
   const gameSongs = customSongs.length >= 24 ? customSongs : songs;
   return {
