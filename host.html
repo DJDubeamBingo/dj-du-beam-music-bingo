@@ -202,7 +202,8 @@ function syncSongSelector(value) {
   function draw(value){currentState=value;const played=Array.isArray(value?.played)?value.played:[];$('count').textContent=played.length;$('roundNumber').textContent=Math.max(1,Number(value?.round)||1);$('current').textContent=played.length?played[played.length-1]:'Ready to play';$('played').replaceChildren();[...played].reverse().forEach((song,index)=>{const item=document.createElement('div');item.className='host-song';item.textContent=`${played.length-index}. ${song}`;$('played').appendChild(item)});const gameSongs = Array.isArray(value?.songs) && value.songs.length >= 24
   ? value.songs
   : songs;
-$('nextBtn').disabled = busy || played.length >= gameSongs.length;$('newBtn').disabled=busy;syncSongSelector(value);renderClaims();processClaims()}
+$('total').textContent = gameSongs.length;
+                       $('nextBtn').disabled = busy || played.length >= gameSongs.length;$('newBtn').disabled=busy;syncSongSelector(value);renderClaims();processClaims()}
 function shuffledIndexes(length){const indexes=Array.from({length},(_,i)=>i);for(let i=indexes.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[indexes[i],indexes[j]]=[indexes[j],indexes[i]]}return indexes}
 
 async function markSelectedSong() {
