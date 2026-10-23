@@ -1,3 +1,61 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DJ DU BEAM Music Bingo</title><link rel="stylesheet" href="styles.css"></head><body><div class="wrap"><img class="logo" src="logo.jpeg"><h1 class="title">MUSIC BINGO</h1><p class="sub">SCAN • LISTEN • MARK • WIN</p><section id="join" class="panel"><h2>Join Game</h2><input id="name" placeholder="Your name"><br><br><input id="code" placeholder="Game code e.g. DUBEAM-01"><br><br><button onclick="joinGame()">JOIN GAME →</button><p class="small">No app download. Your card is saved on this phone.</p></section><section id="game" class="panel hide"><div id="playerLine" class="status"></div><div class="headers"><div>B</div><div>I</div><div>N</div><div>G</div><div>O</div></div><div id="grid" class="grid"></div><br><button class="bingo" onclick="claimBingo()">🏆 CLAIM BINGO</button><div id="result"></div></section></div><script src="songs.js"></script><script>
-const $=id=>document.getElementById(id);let card=[],marks=[];function seededShuffle(a,seed){let x=[...a],h=2166136261;for(const c of seed)h=(h^c.charCodeAt(0))*16777619>>>0;for(let i=x.length-1;i>0;i--){h=(h*1664525+1013904223)>>>0;let j=h%(i+1);[x[i],x[j]]=[x[j],x[i]]}return x}function joinGame(){let n=$('name').value.trim(),c=$('code').value.trim().toUpperCase();if(!n||!c)return alert('Enter your name and game code.');localStorage.duBeamPlayer=n;localStorage.duBeamCode=c;card=seededShuffle(window.DUBEAM_SONGS,n+'|'+c).slice(0,24);card.splice(12,0,'⭐ FREE SPACE ⭐');marks=Array(25).fill(false);marks[12]=true;render();$('join').classList.add('hide');$('game').classList.remove('hide');$('playerLine').innerHTML='<b>'+escapeHtml(n)+'</b> • '+escapeHtml(c)+' • Card #'+String(hash(n+c)%1000).padStart(3,'0')}function render(){$('grid').innerHTML='';card.forEach((s,i)=>{let d=document.createElement('button');d.className='cell'+(marks[i]?' marked':'')+(i===12?' free':'');d.textContent=s;d.onclick=()=>{if(i!==12){marks[i]=!marks[i];render()}};$('grid').appendChild(d)})}function wins(){let lines=[];for(let r=0;r<5;r++)lines.push([0,1,2,3,4].map(x=>r*5+x));for(let c=0;c<5;c++)lines.push([0,1,2,3,4].map(x=>x*5+c));lines.push([0,6,12,18,24],[4,8,12,16,20]);return lines.some(l=>l.every(i=>marks[i]))}function claimBingo(){let r=$('result');if(wins()){r.className='status good';r.innerHTML='<b>🎉 BINGO CLAIM READY!</b><br>Show this card to DJ DU BEAM for host verification.'}else{r.className='status bad';r.innerHTML='<b>Not yet!</b> You need 5 marked squares in a row, column, or diagonal.'}}function hash(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))>>>0;return h}function escapeHtml(s){return s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}let p=localStorage.duBeamPlayer,c=localStorage.duBeamCode;if(p&&c){$('name').value=p;$('code').value=c}
-</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DJ DU BEAM Music Bingo</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+.live-note{margin:12px 0;overflow-wrap:anywhere;color:#a6f0b1}
+.live-error{color:#ffb1b1}
+button:disabled{opacity:.55;cursor:not-allowed}
+</style>
+</head>
+<body>
+<div class="wrap">
+<img class="logo" src="logo.jpeg" alt="DJ DU BEAM">
+<h1 class="title">MUSIC BINGO</h1>
+<p class="sub">SCAN • LISTEN • MARK • WIN</p>
+<section id="join" class="panel">
+<h2>Join Game</h2>
+<input id="name" placeholder="Your name" maxlength="60" autocomplete="name"><br><br>
+<input id="code" value="DUBEAM-01" readonly aria-label="Event code"><br><br>
+<button id="joinBtn" type="button" disabled>JOIN GAME →</button>
+<p class="small">No app download needed.</p>
+<div id="connection" class="live-note" role="status">Connecting to Firebase…</div>
+</section>
+<section id="game" class="panel hide">
+<div id="playerLine" class="status"></div>
+<div id="liveStatus" class="live-note" role="status">Connecting to live songs…</div>
+<div class="headers"><div>B</div><div>I</div><div>N</div><div>G</div><div>O</div></div>
+<div id="grid" class="grid"></div><br>
+<button id="claimBtn" class="bingo" type="button">🏆 CLAIM BINGO</button>
+<div id="result" role="status"></div>
+<p class="small">Live verification test: show a verified card to the DJ. Automatic host alerts are not enabled yet.</p>
+</section>
+</div>
+<script src="songs.js"></script>
+<script src="config.js"></script>
+<script type="module">
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import {getAuth,onAuthStateChanged,signInAnonymously} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import {getDatabase,ref,onValue} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
+const $=id=>document.getElementById(id);
+const GAME='DUBEAM-01';
+let card=[],marks=[],played=[],connected=false,ready=false;
+function hash(s){let h=0;for(const c of s)h=(Math.imul(h,31)+c.charCodeAt(0))>>>0;return h}
+function seededShuffle(a,seed){let x=[...a],h=2166136261;for(const c of seed)h=Math.imul(h^c.charCodeAt(0),16777619)>>>0;for(let i=x.length-1;i>0;i--){h=(Math.imul(h,1664525)+1013904223)>>>0;const j=h%(i+1);[x[i],x[j]]=[x[j],x[i]]}return x}
+function note(id,message,error=false){$(id).textContent=message;$(id).className='live-note'+(error?' live-error':'')}
+function render(){const grid=$('grid');grid.replaceChildren();card.forEach((song,i)=>{const cell=document.createElement('button');cell.type='button';cell.className='cell'+(marks[i]?' marked':'')+(i===12?' free':'');cell.textContent=song;cell.addEventListener('click',()=>{if(i!==12){marks[i]=!marks[i];render()}});grid.appendChild(cell)})}
+function winLines(){const lines=[];for(let r=0;r<5;r++)lines.push([0,1,2,3,4].map(c=>r*5+c));for(let c=0;c<5;c++)lines.push([0,1,2,3,4].map(r=>r*5+c));lines.push([0,6,12,18,24],[4,8,12,16,20]);return lines}
+function claim(){const result=$('result');if(!connected){result.className='status bad';result.textContent='Cannot verify: live song connection is unavailable.';return}const valid=winLines().some(line=>line.every(i=>marks[i]&&(i===12||played.includes(card[i]))));result.className='status '+(valid?'good':'bad');result.textContent=valid?'🎉 BINGO VERIFIED against the live played-song list! Show your card to the DJ.':'Not verified: you need a complete marked line containing only songs the DJ has played.'}
+function join(){if(!ready||!connected){alert('Please wait for the live connection.');return}const name=$('name').value.trim();if(!name){alert('Enter your name.');return}const seed=name+'|'+GAME;card=seededShuffle(window.DUBEAM_SONGS,seed).slice(0,24);card.splice(12,0,'⭐ FREE SPACE ⭐');marks=Array(25).fill(false);marks[12]=true;$('playerLine').textContent=name+' • '+GAME+' • Card #'+String(hash(seed)%100000).padStart(5,'0');$('join').classList.add('hide');$('game').classList.remove('hide');note('liveStatus','Live feed connected • '+played.length+' songs played');render()}
+$('joinBtn').addEventListener('click',join);
+$('claimBtn').addEventListener('click',claim);
+const requestedCode=new URL(location.href).searchParams.get('code');
+if(requestedCode&&requestedCode.toUpperCase()!==GAME){note('connection','This test build only supports '+GAME+'.',true)}
+else if(!window.DUBEAM_FIREBASE_CONFIG||!Array.isArray(window.DUBEAM_SONGS)||window.DUBEAM_SONGS.length<24){note('connection','Missing Firebase configuration or song list.',true)}
+else{try{const app=initializeApp(window.DUBEAM_FIREBASE_CONFIG);const auth=getAuth(app);const db=getDatabase(app);onAuthStateChanged(auth,async user=>{if(!user){try{await signInAnonymously(auth)}catch(error){note('connection','Anonymous sign-in failed: '+error.message,true)}return}ready=true;onValue(ref(db,'games/'+GAME+'/currentSong'),snapshot=>{const value=snapshot.val();played=Array.isArray(value?.played)?value.played:[];connected=true;$('joinBtn').disabled=false;note('connection','Connected! Enter your name to join.');if(!$('game').classList.contains('hide'))note('liveStatus','Live feed connected • '+played.length+' songs played')},error=>{connected=false;$('joinBtn').disabled=true;note('connection','Firebase read failed: '+error.message,true);note('liveStatus','Live connection failed: '+error.message,true)})},error=>note('connection','Authentication failed: '+error.message,true))}catch(error){note('connection','Firebase setup failed: '+error.message,true)}}
+</script>
+</body>
+</html>
