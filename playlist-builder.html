@@ -1,0 +1,82 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DJ DU BEAM Playlist Builder</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <img class="logo" src="logo.jpeg" alt="DJ DU BEAM">
+    <h1 class="title">PLAYLIST BUILDER</h1>
+    <p class="sub">CUSTOM MUSIC BINGO PLAYLISTS</p>
+
+    <section class="panel">
+      <h2>Upload Song List</h2>
+      <input type="file" id="songFile" accept=".csv,.txt">
+      <button id="loadSongs">LOAD SONGS</button>
+      <p id="status">No songs loaded yet.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Game Settings</h2>
+      <label for="songCount">Number of songs</label>
+      <input type="number" id="songCount" min="24" value="75">
+      <button id="buildGame">BUILD PLAYLIST</button>
+    </section>
+
+    <section class="panel">
+      <h2>Song List</h2>
+      <ol id="songList"></ol>
+    </section>
+  </div>
+
+  <script>
+    let songs = [];
+
+    document.getElementById("loadSongs").onclick = async () => {
+      const file = document.getElementById("songFile").files[0];
+
+      if (!file) {
+        alert("Choose a CSV or TXT file first.");
+        return;
+      }
+
+      const text = await file.text();
+
+      songs = [...new Set(
+        text.split(/\r?\n/)
+          .map(song => song.trim())
+          .filter(Boolean)
+      )];
+
+      document.getElementById("status").textContent =
+        songs.length + " songs loaded.";
+    };
+
+    document.getElementById("buildGame").onclick = () => {
+      const count = Number(
+        document.getElementById("songCount").value
+      );
+
+      if (!Number.isInteger(count) || count < 24 ||
+          count > songs.length) {
+        alert("Choose between 24 and " +
+              songs.length + " songs.");
+        return;
+      }
+
+      const list = document.getElementById("songList");
+      list.replaceChildren();
+
+      songs.slice(0, count).forEach(song => {
+        const item = document.createElement("li");
+        item.textContent = song;
+        list.appendChild(item);
+      });
+    };
+  </script>
+</body>
+</html>
