@@ -77,6 +77,97 @@ import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {getDatabase,ref,onValue,runTransaction,update} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
 const $=id=>document.getElementById(id),GAME='DUBEAM-01',songs=window.DUBEAM_SONGS,config=window.DUBEAM_FIREBASE_CONFIG;
+
+let customSongs = [];
+
+function readSongList(text) {
+  const lines = text.replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const uniqueSongs = new Map();
+
+  for (const line of lines) {
+    const columns = line.split(",").map(x => x.trim());
+
+    if (
+      columns.length === 2 &&
+      columns[0].toLowerCase() === "artist" &&
+      columns[1].toLowerCase() === "title"
+    ) {
+      continue;
+    }
+
+    const song = columns.length === 2
+      ? columns.join(" - ")
+      : line;
+
+    if (song.toLowerCase() === "song") continue;
+
+    uniqueSongs.set(song.toLowerCase(), song);
+  }
+
+  return [...uniqueSongs.values()];
+}
+
+async function loadCustomPlaylist() {
+  const file = $("playlistFile").files[0];
+  const count = Number($("playlistCount").value);
+  const statusBox = $("playlistStatus");
+
+  if (!file) {
+    statusBox.textContent = "Choose a CSV or TXT file first.";
+    return;
+  }
+
+  if (!Number.isInteger(count) || count < 24) {
+    statusBox.textContent = "Choose at least 24 songs.";
+    return;
+  }
+
+  try {
+    const text = await file.text();
+    const imported = readSongList(text);
+
+    if (imported.length < count) {
+      statusBox.textContent =
+        "Only " + imported.length +
+        " unique songs found. Choose a smaller number.";
+      return;
+    }
+
+    customSongs = imported.slice(0, count);
+
+    const selector = $("songSelector");
+    selector.replaceChildren();
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Select a song...";
+    selector.appendChild(placeholder);
+
+    customSongs.forEach((song, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = song;
+      selector.appendChild(option);
+    });
+
+    statusBox.textContent =
+      customSongs.length + " songs loaded successfully!";
+
+  } catch (error) {
+    statusBox.textContent =
+      "Unable to read playlist: " + error.message;
+  }
+}
+
+$("loadPlaylistBtn").addEventListener(
+  "click",
+  loadCustomPlaylist
+);
+  
 let auth,db,unsubscribe=null,unsubscribeClaims=null,busy=false,currentState=null,claimData={},processing=new Set(),seenClaims=new Set(),claimsLoaded=false,winnerQueue=[],winnerOpen=false;
 function status(message,error=false){$('syncStatus').textContent=message;$('syncStatus').className='host-note '+(error?'host-error':'host-ok')}
 function loginStatus(message,error=false){$('loginStatus').textContent=message;$('loginStatus').className='host-note '+(error?'host-error':'')}
