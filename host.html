@@ -20,6 +20,48 @@
 <body><div class="wrap"><img class="logo" src="logo.jpeg" alt="DJ DU BEAM"><h1 class="title">HOST DASHBOARD</h1><p class="sub">FIREBASE LIVE MUSIC BINGO</p>
 <section class="panel" id="loginPanel"><h2>DJ Login</h2><input class="host-field" id="email" type="email" placeholder="DJ email" autocomplete="username"><input class="host-field" id="password" type="password" placeholder="Password" autocomplete="current-password"><button id="loginBtn" type="button">SIGN IN</button><div class="host-note" id="loginStatus" role="status">Checking connection…</div></section>
 <div id="dashboard" class="hide"><section class="panel"><div class="bigcode" id="gameCode">DUBEAM-01</div><p class="sub">Game <span id="roundNumber">1</span> • Throwback R&amp;B + Hip-Hop</p><p class="small">Permanent code and join link. Press NEXT SONG after playing that track in VirtualDJ.</p><div class="row"><button id="nextBtn" type="button">▶ NEXT SONG</button><button id="newBtn" class="secondary" type="button">✦ NEW GAME</button><button id="logoutBtn" class="secondary" type="button">SIGN OUT</button></div><div class="host-note" id="syncStatus" role="status"></div></section>
+
+<section class="panel" id="playlistPanel">
+  <h2>🎵 CUSTOM SONG PLAYLIST</h2>
+  <p class="small">
+    Upload your own song list and choose how many songs
+    to use for Music Bingo.
+  </p>
+
+  <label for="playlistFile">Upload Song List</label>
+  <input
+    type="file"
+    id="playlistFile"
+    accept=".csv,.txt"
+    class="host-field"
+  >
+
+  <label for="playlistCount">Number of Songs</label>
+  <input
+    type="number"
+    id="playlistCount"
+    class="host-field"
+    min="24"
+    value="75"
+  >
+
+  <button id="loadPlaylistBtn" type="button">
+    🎵 LOAD PLAYLIST
+  </button>
+
+  <div id="playlistStatus" class="host-note">
+    No custom playlist loaded.
+  </div>
+
+  <h3>Choose Song Playing</h3>
+  <select id="songSelector" class="host-field">
+    <option value="">Select a song...</option>
+  </select>
+
+  <button id="markSongBtn" type="button" disabled>
+    ▶ MARK SONG AS PLAYED
+  </button>
+</section>
 <section class="panel"><h2>🏆 BINGO CLAIMS <span id="claimCount">0</span></h2><p class="small">New claims appear automatically. Verification uses the current round and DJ's played-song list. Keep this dashboard open.</p><div id="claims" role="status">Waiting for claims…</div><div class="host-note" id="claimStatus"></div></section>
 <section class="panel"><h2>Current Song</h2><div id="current" class="status" style="font-size:24px">Ready to play</div></section>
 <section class="panel"><h2>Played Songs <span id="count">0</span> / <span id="total">75</span></h2><div id="played" class="songlist"></div></section>
