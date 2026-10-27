@@ -16,7 +16,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 <section id="join" class="panel">
 <h2>Join Game</h2>
 <input id="name" placeholder="Your name" maxlength="60" autocomplete="name"><br><br>
-<input id="code" value="DUBEAM-TEST" readonly aria-label="Event code"><br><br>
+<input id="code" value="DUBEAM-01" readonly aria-label="Event code"><br><br>
 <button id="joinBtn" type="button" disabled>JOIN GAME →</button>
 <p class="small">No app download needed.</p><div id="connection" class="live-note" role="status">Connecting to Firebase…</div>
 </section>
@@ -35,7 +35,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInAnonymously} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {getDatabase,ref,onValue,push,set,get} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
-const $=id=>document.getElementById(id),GAME='DUBEAM-TEST';
+const $=id=>document.getElementById(id),GAME='DUBEAM-01';
 let card=[],marks=[],played=[],connected=false,ready=false,round=1,playerName='',db,auth,claimBusy=false,unsubscribeClaim=null;
 
 let activeSongs = window.DUBEAM_SONGS;
