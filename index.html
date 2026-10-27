@@ -60,22 +60,12 @@ async function claim(){
  if(!validMarks){result.className='status bad';result.textContent='Mark a complete BINGO line before submitting.';return}
  claimBusy=true;$('claimBtn').disabled=true;result.className='status';result.textContent='Sending claim to DJ…';
  const submittedRound=round;
-try{const claimsSnapshot = await get(ref(db,`games/${GAME}/claims`));
-const previousWin = Object.values(claimsSnapshot.val() || {}).some(c =>
-  c.playerUid === auth.currentUser.uid &&
-  c.round === submittedRound &&
-  c.cardNumber === cardNumber() &&
-  c.status === 'verified'
-);
+try{
 
-if (previousWin) {
-  alreadyWon = true;
-  $('claimBtn').disabled = true;
-  result.className = 'status good';
-  result.textContent = '🏆 You already won this round!';
-  claimBusy = false;
-  return;
-} 
+ 
+
+ 
+ 
   const claimRef=push(ref(db,`games/${GAME}/claims`));
   await set(claimRef,{name:playerName,cardNumber:cardNumber(),round:submittedRound,marks:[...marks],status:'pending',createdAt:Date.now(),playerUid:auth.currentUser.uid});
   if(unsubscribeClaim)unsubscribeClaim();
