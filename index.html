@@ -34,7 +34,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 <script type="module">
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInAnonymously} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import {} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
+import {getDatabase,ref,onValue,push,set,get} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
 const $=id=>document.getElementById(id),GAME='DUBEAM-TEST';
 let card=[],marks=[],played=[],connected=false,ready=false,round=1,playerName='',db,auth,claimBusy=false,unsubscribeClaim=null;
 
@@ -48,11 +48,12 @@ function cardNumber(){return String(hash(cardSeed())%100000).padStart(5,'0')}
 function setCard(){if(!playerName)return;const seed=cardSeed();card=seededShuffle(activeSongs,seed).slice(0,24);card.splice(12,0,'⭐ FREE SPACE ⭐');marks=Array(25).fill(false);marks[12]=true;alreadyWon=false;$('claimBtn').disabled=false;$('playerLine').textContent=playerName+' • '+GAME+' • Round '+round+' • Card #'+cardNumber();$('result').textContent='';if(unsubscribeClaim){unsubscribeClaim();unsubscribeClaim=null}render()}
 function winLines(){const lines=[];for(let r=0;r<5;r++)lines.push([0,1,2,3,4].map(c=>r*5+c));for(let c=0;c<5;c++)lines.push([0,1,2,3,4].map(r=>r*5+c));lines.push([0,6,12,18,24],[4,8,12,16,20]);return lines}
 async function claim(){
-if (alreadyWon) {
+ const result=$('result');
+ if (alreadyWon) {
   result.className = 'status good';
   result.textContent = '🏆 BINGO already verified for this round!';
   return;
-} const result=$('result');
+ }
  if(!connected||!auth?.currentUser){result.className='status bad';result.textContent='Cannot submit: live connection is unavailable.';return}
  if(claimBusy)return;
  const validMarks=winLines().some(line=>line.every(i=>marks[i]));
