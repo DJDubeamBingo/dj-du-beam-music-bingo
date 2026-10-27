@@ -67,8 +67,8 @@ async function claim(){
   unsubscribeClaim=onValue(claimRef,snap=>{
    if(submittedRound!==round)return;
    const value=snap.val();if(!value)return;
-   if(value.status==='verified'){alreadyWon = true;result.className='status good';result.textContent='🏆 BINGO VERIFIED! Show this result to the DJ.'}
-   $('claimBtn').disabled = true;else if(value.status==='rejected'){result.className='status bad';result.textContent='Not verified: '+(value.reason||'No winning line of played songs')}
+   if(value.status==='verified'){alreadyWon = true;$('claimBtn').disabled=true;result.className='status good';result.textContent='🏆 BINGO VERIFIED! Show this result to the DJ.'}
+  else if(value.status==='rejected'){result.className='status bad';result.textContent='Not verified: '+(value.reason||'No winning line of played songs')}
    else{result.className='status';result.textContent='⏳ Claim sent! Waiting for DJ verification…'}
   },error=>{result.className='status bad';result.textContent='Unable to read claim status: '+error.message});
  }catch(error){result.className='status bad';result.textContent='Claim could not be sent: '+error.message}
