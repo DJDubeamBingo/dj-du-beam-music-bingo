@@ -20,6 +20,48 @@
 <body><div class="wrap"><img class="logo" src="logo.jpeg" alt="DJ DU BEAM"><h1 class="title">HOST DASHBOARD</h1><p class="sub">FIREBASE LIVE MUSIC BINGO</p>
 <section class="panel" id="loginPanel"><h2>DJ Login</h2><input class="host-field" id="email" type="email" placeholder="DJ email" autocomplete="username"><input class="host-field" id="password" type="password" placeholder="Password" autocomplete="current-password"><button id="loginBtn" type="button">SIGN IN</button><div class="host-note" id="loginStatus" role="status">Checking connection…</div></section>
 <div id="dashboard" class="hide"><section class="panel"><div class="bigcode" id="gameCode">DUBEAM-01</div><p class="sub">Game <span id="roundNumber">1</span> • Throwback R&amp;B + Hip-Hop</p><p class="small">Permanent code and join link. Press NEXT SONG after playing that track in VirtualDJ.</p><div class="row"><button id="nextBtn" type="button">▶ NEXT SONG</button><button id="newBtn" class="secondary" type="button">✦ NEW GAME</button><button id="logoutBtn" class="secondary" type="button">SIGN OUT</button></div><div class="host-note" id="syncStatus" role="status"></div></section>
+
+<section class="panel" id="playlistPanel">
+  <h2>🎵 CUSTOM SONG PLAYLIST</h2>
+  <p class="small">
+    Upload your own song list and choose how many songs
+    to use for Music Bingo.
+  </p>
+
+  <label for="playlistFile">Upload Song List</label>
+  <input
+    type="file"
+    id="playlistFile"
+    accept=".csv,.txt"
+    class="host-field"
+  >
+
+  <label for="playlistCount">Number of Songs</label>
+  <input
+    type="number"
+    id="playlistCount"
+    class="host-field"
+    min="24"
+    value="75"
+  >
+
+  <button id="loadPlaylistBtn" type="button">
+    🎵 LOAD PLAYLIST
+  </button>
+
+  <div id="playlistStatus" class="host-note">
+    No custom playlist loaded.
+  </div>
+
+  <h3>Choose Song Playing</h3>
+  <select id="songSelector" class="host-field">
+    <option value="">Select a song...</option>
+  </select>
+
+  <button id="markSongBtn" type="button" disabled>
+    ▶ MARK SONG AS PLAYED
+  </button>
+</section>
 <section class="panel"><h2>🏆 BINGO CLAIMS <span id="claimCount">0</span></h2><p class="small">New claims appear automatically. Verification uses the current round and DJ's played-song list. Keep this dashboard open.</p><div id="claims" role="status">Waiting for claims…</div><div class="host-note" id="claimStatus"></div></section>
 <section class="panel"><h2>Current Song</h2><div id="current" class="status" style="font-size:24px">Ready to play</div></section>
 <section class="panel"><h2>Played Songs <span id="count">0</span> / <span id="total">75</span></h2><div id="played" class="songlist"></div></section>
@@ -35,16 +77,215 @@ import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {getDatabase,ref,onValue,runTransaction,update} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
 const $=id=>document.getElementById(id),GAME='DUBEAM-01',songs=window.DUBEAM_SONGS,config=window.DUBEAM_FIREBASE_CONFIG;
+
+let customSongs = [];
+
+function readSongList(text) {
+  const lines = text.replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const uniqueSongs = new Map();
+
+  for (const line of lines) {
+    const columns = line.split(",").map(x => x.trim());
+
+    if (
+      columns.length === 2 &&
+      columns[0].toLowerCase() === "artist" &&
+      columns[1].toLowerCase() === "title"
+    ) {
+      continue;
+    }
+
+    const song = columns.length === 2
+      ? columns.join(" - ")
+      : line;
+
+    if (song.toLowerCase() === "song") continue;
+
+    uniqueSongs.set(song.toLowerCase(), song);
+  }
+
+  return [...uniqueSongs.values()];
+}
+
+async function loadCustomPlaylist() {
+  const file = $("playlistFile").files[0];
+  const count = Number($("playlistCount").value);
+  const statusBox = $("playlistStatus");
+
+  if (!file) {
+    statusBox.textContent = "Choose a CSV or TXT file first.";
+    return;
+  }
+
+  if (!Number.isInteger(count) || count < 24) {
+    statusBox.textContent = "Choose at least 24 songs.";
+    return;
+  }
+
+  try {
+    const text = await file.text();
+    const imported = readSongList(text);
+
+    if (imported.length < count) {
+      statusBox.textContent =
+        "Only " + imported.length +
+        " unique songs found. Choose a smaller number.";
+      return;
+    }
+
+    customSongs = imported.slice(0, count);
+
+ 
+
+  
+    statusBox.textContent =
+      customSongs.length + " songs loaded successfully!";
+
+  } catch (error) {
+    statusBox.textContent =
+      "Unable to read playlist: " + error.message;
+  }
+}
+
+$("loadPlaylistBtn").addEventListener(
+  "click",
+  loadCustomPlaylist
+);
+  
 let auth,db,unsubscribe=null,unsubscribeClaims=null,busy=false,currentState=null,claimData={},processing=new Set(),seenClaims=new Set(),claimsLoaded=false,winnerQueue=[],winnerOpen=false;
 function status(message,error=false){$('syncStatus').textContent=message;$('syncStatus').className='host-note '+(error?'host-error':'host-ok')}
 function loginStatus(message,error=false){$('loginStatus').textContent=message;$('loginStatus').className='host-note '+(error?'host-error':'')}
 function hash(s){let h=0;for(const c of s)h=(Math.imul(h,31)+c.charCodeAt(0))>>>0;return h}
 function seededShuffle(a,seed){let x=[...a],h=2166136261;for(const c of seed)h=Math.imul(h^c.charCodeAt(0),16777619)>>>0;for(let i=x.length-1;i>0;i--){h=(Math.imul(h,1664525)+1013904223)>>>0;const j=h%(i+1);[x[i],x[j]]=[x[j],x[i]]}return x}
 function winLines(){const lines=[];for(let r=0;r<5;r++)lines.push([0,1,2,3,4].map(c=>r*5+c));for(let c=0;c<5;c++)lines.push([0,1,2,3,4].map(r=>r*5+c));lines.push([0,6,12,18,24],[4,8,12,16,20]);return lines}
-function draw(value){currentState=value;const played=Array.isArray(value?.played)?value.played:[];$('count').textContent=played.length;$('roundNumber').textContent=Math.max(1,Number(value?.round)||1);$('current').textContent=played.length?played[played.length-1]:'Ready to play';$('played').replaceChildren();[...played].reverse().forEach((song,index)=>{const item=document.createElement('div');item.className='host-song';item.textContent=`${played.length-index}. ${song}`;$('played').appendChild(item)});$('nextBtn').disabled=busy||played.length>=songs.length;$('newBtn').disabled=busy;renderClaims();processClaims()}
+
+function syncSongSelector(value) {
+  const gameSongs = Array.isArray(value?.songs) && value.songs.length >= 24
+    ? value.songs
+    : [];
+
+  const selector = $('songSelector');
+  const previousSelection = selector.value;
+  const previousSong = selector.options[selector.selectedIndex]?.textContent;
+
+  selector.replaceChildren();
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Select a song...';
+  selector.appendChild(placeholder);
+
+  gameSongs.forEach((song, index) => {
+    const option = document.createElement('option');
+    option.value = String(index);
+    option.textContent = song;
+    option.disabled = Array.isArray(value?.played) && value.played.includes(song);
+    selector.appendChild(option);
+  });
+
+  if (
+    previousSelection !== '' &&
+    gameSongs[Number(previousSelection)] === previousSong &&
+    !selector.options[Number(previousSelection) + 1]?.disabled
+  ) {
+    selector.value = previousSelection;
+  }
+
+  $('markSongBtn').disabled =
+    busy || gameSongs.length < 24 || selector.value === '';
+}
+
+  function draw(value){currentState=value;const played=Array.isArray(value?.played)?value.played:[];$('count').textContent=played.length;$('roundNumber').textContent=Math.max(1,Number(value?.round)||1);$('current').textContent=played.length?played[played.length-1]:'Ready to play';$('played').replaceChildren();[...played].reverse().forEach((song,index)=>{const item=document.createElement('div');item.className='host-song';item.textContent=`${played.length-index}. ${song}`;$('played').appendChild(item)});const gameSongs = Array.isArray(value?.songs) && value.songs.length >= 24
+  ? value.songs
+  : songs;
+$('total').textContent = gameSongs.length;
+                       $('nextBtn').disabled = busy || played.length >= gameSongs.length;$('newBtn').disabled=busy;syncSongSelector(value);renderClaims();processClaims()}
 function shuffledIndexes(length){const indexes=Array.from({length},(_,i)=>i);for(let i=indexes.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[indexes[i],indexes[j]]=[indexes[j],indexes[i]]}return indexes}
-async function updateGame(newGame){if(busy)return;if(newGame&&!confirm('Start a NEW GAME? This will clear played songs and reset player cards for everyone. The game code stays DUBEAM-01.'))return;busy=true;draw(currentState);try{const result=await runTransaction(ref(db,`games/${GAME}/currentSong`),previous=>{const old=previous&&typeof previous==='object'?previous:{};const round=Math.max(1,Number(old.round)||1);if(newGame)return{played:[],order:shuffledIndexes(songs.length),round:round+1,updatedAt:Date.now()};const order=Array.isArray(old.order)&&old.order.length===songs.length?old.order:shuffledIndexes(songs.length);const played=Array.isArray(old.played)?old.played:[];if(played.length>=order.length)return;return{played:[...played,songs[order[played.length]]],order,round,updatedAt:Date.now()}},{applyLocally:false});status(result.committed?(newGame?'New game started! Player cards refreshed.':'Song saved to Firebase.'):'No more songs to play.')}catch(error){status('Firebase write failed: '+error.message,true)}finally{busy=false;draw(currentState)}}
-function verdict(claim){const round=Math.max(1,Number(currentState?.round)||1);if(!claim||typeof claim.name!=='string'||!claim.name.trim()||claim.name.length>60||!Number.isSafeInteger(claim.round)||claim.round!==round)return{status:'rejected',reason:'Invalid player or wrong game round'};const seed=claim.name.trim()+'|'+GAME+'|'+round;const card=seededShuffle(songs,seed).slice(0,24);card.splice(12,0,'⭐ FREE SPACE ⭐');const number=String(hash(seed)%100000).padStart(5,'0');if(claim.cardNumber!==number||!Array.isArray(claim.marks)||claim.marks.length!==25||claim.marks.some(v=>typeof v!=='boolean')||claim.marks[12]!==true)return{status:'rejected',reason:'Card information does not match'};const played=Array.isArray(currentState?.played)?currentState.played:[];const verified=winLines().some(line=>line.every(i=>claim.marks[i]&&(i===12||played.includes(card[i]))));return{status:verified?'verified':'rejected',reason:verified?'Winning line confirmed':'No complete line of played songs'}}
+
+async function markSelectedSong() {
+  const selectedIndex = Number($('songSelector').value);
+  const selectedValue = $('songSelector').value;
+
+  if (selectedValue === '') {
+    status('Choose a song first.', true);
+    return;
+  }
+
+  if (busy) return;
+
+  busy = true;
+
+  try {
+    const result = await runTransaction(
+      ref(db, `games/${GAME}/currentSong`),
+      previous => {
+        if (!previous || !Array.isArray(previous.songs)) return;
+
+        const gameSongs = previous.songs;
+        const song = gameSongs[selectedIndex];
+
+        if (!song) return;
+
+        const played = Array.isArray(previous.played)
+          ? previous.played
+          : [];
+
+        if (played.includes(song)) return;
+
+        return {
+          ...previous,
+          played: [...played, song],
+          updatedAt: Date.now()
+        };
+      },
+      { applyLocally: false }
+    );
+
+    status(
+      result.committed
+        ? 'Selected song marked as played!'
+        : 'Song already played or no custom game is active.',
+      !result.committed
+    );
+  } catch (error) {
+    status('Unable to mark song: ' + error.message, true);
+  } finally {
+    busy = false;
+    draw(currentState);
+  }
+}
+
+  async function updateGame(newGame){if(busy)return;if(newGame&&!confirm('Start a NEW GAME? This will clear played songs and reset player cards for everyone. The game code stays DUBEAM-01.'))return;busy=true;draw(currentState);try{const result=await runTransaction(ref(db,`games/${GAME}/currentSong`),previous=>{const old=previous&&typeof previous==='object'?previous:{};const round=Math.max(1,Number(old.round)||1);
+if(newGame){
+  const gameSongs = customSongs.length >= 24 ? customSongs : songs;
+  return {
+    played: [],
+    songs: gameSongs,
+    order: shuffledIndexes(gameSongs.length),
+    round: round + 1,
+    updatedAt: Date.now()
+  };
+}
+
+const gameSongs = Array.isArray(old.songs) && old.songs.length >= 24 ? old.songs : songs;
+const order = Array.isArray(old.order) && old.order.length === gameSongs.length
+  ? old.order
+  : shuffledIndexes(gameSongs.length);
+const played=Array.isArray(old.played)?old.played:[];if(played.length>=order.length)return;
+return {
+  ...old,
+  played: [...played, gameSongs[order[played.length]]],
+  order,
+  round,
+  updatedAt: Date.now()
+}
+},{applyLocally:false});status(result.committed?(newGame?'New game started! Player cards refreshed.':'Song saved to Firebase.'):'No more songs to play.')}catch(error){status('Firebase write failed: '+error.message,true)}finally{busy=false;draw(currentState)}}
+function verdict(claim){const round=Math.max(1,Number(currentState?.round)||1);if(!claim||typeof claim.name!=='string'||!claim.name.trim()||claim.name.length>60||!Number.isSafeInteger(claim.round)||claim.round!==round)return{status:'rejected',reason:'Invalid player or wrong game round'};const seed=claim.name.trim()+'|'+GAME+'|'+round;const gameSongs=Array.isArray(currentState?.songs)&&currentState.songs.length>=24?currentState.songs:songs;
+const card=seededShuffle(gameSongs,seed).slice(0,24);card.splice(12,0,'⭐ FREE SPACE ⭐');const number=String(hash(seed)%100000).padStart(5,'0');if(claim.cardNumber!==number||!Array.isArray(claim.marks)||claim.marks.length!==25||claim.marks.some(v=>typeof v!=='boolean')||claim.marks[12]!==true)return{status:'rejected',reason:'Card information does not match'};const played=Array.isArray(currentState?.played)?currentState.played:[];const verified=winLines().some(line=>line.every(i=>claim.marks[i]&&(i===12||played.includes(card[i]))));return{status:verified?'verified':'rejected',reason:verified?'Winning line confirmed':'No complete line of played songs'}}
 function renderClaims(){const round=Math.max(1,Number(currentState?.round)||1);const entries=Object.entries(claimData).filter(([,c])=>c&&c.round===round).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)).slice(0,30);$('claimCount').textContent=entries.length;const root=$('claims');root.replaceChildren();if(!entries.length){root.textContent='No BINGO claims this round yet.';return}for(const [id,c] of entries){const item=document.createElement('div');item.className='claim '+(c.status||'');const heading=document.createElement('strong');heading.textContent=(c.status==='verified'?'🏆 VERIFIED':c.status==='rejected'?'❌ NOT VERIFIED':'⏳ CHECKING')+' — '+String(c.name||'Player');const detail=document.createElement('div');detail.textContent='Card #'+String(c.cardNumber||'?')+' • Round '+c.round;const reason=document.createElement('small');reason.textContent=c.reason||'Waiting for host verification';item.append(heading,detail,reason);if(c.status==='verified'){const replay=document.createElement('button');replay.type='button';replay.textContent='🏆 SHOW WINNER ALERT';replay.style.marginTop='10px';replay.addEventListener('click',()=>{winnerQueue.push(c);showNextWinner()});item.appendChild(replay)}root.appendChild(item)}}
 async function processClaims(){if(!currentState||!auth?.currentUser||auth.currentUser.isAnonymous)return;const round=Math.max(1,Number(currentState.round)||1);for(const [id,c] of Object.entries(claimData)){if(!c||c.status!=='pending'||processing.has(id))continue;processing.add(id);try{const v=verdict(c);await update(ref(db,`games/${GAME}/claims/${id}`),{status:v.status,reason:v.reason,checkedAt:Date.now()});$('claimStatus').textContent='Last claim checked: '+String(c.name||'Player')}catch(e){$('claimStatus').textContent='Claim verification failed: '+e.message}finally{processing.delete(id)}}}
 function showNextWinner(){if(winnerOpen||!winnerQueue.length)return;const claim=winnerQueue.shift();winnerOpen=true;$('winnerName').textContent=String(claim.name||'Player');$('winnerDetails').textContent='Card #'+String(claim.cardNumber||'?')+' • Round '+claim.round;$('winnerOverlay').classList.remove('hide');$('winnerDismiss').focus()}
@@ -52,7 +293,20 @@ $('winnerDismiss').addEventListener('click',()=>{$('winnerOverlay').classList.ad
 function checkNewWinners(){const round=Math.max(1,Number(currentState?.round)||1);const verified=Object.entries(claimData).filter(([,c])=>c&&c.round===round&&c.status==='verified');if(!claimsLoaded){verified.forEach(([id])=>seenClaims.add(id));claimsLoaded=true;return}for(const [id,claim] of verified){if(seenClaims.has(id))continue;seenClaims.add(id);winnerQueue.push(claim)}showNextWinner()}
 function connect(user){if(unsubscribe){unsubscribe();unsubscribe=null}if(unsubscribeClaims){unsubscribeClaims();unsubscribeClaims=null}const authorized=!!user&&!user.isAnonymous;$('loginPanel').classList.toggle('hide',authorized);$('dashboard').classList.toggle('hide',!authorized);if(!authorized){loginStatus(user?'Sign in using your DJ email/password account.':'Sign in with your DJ email and password.',!!user);if(user)signOut(auth).catch(console.error);return}unsubscribe=onValue(ref(db,`games/${GAME}/currentSong`),snap=>{draw(snap.val());status('Connected to Firebase. Ready for live song tracking.')},error=>status('Firebase read failed: '+error.message,true));unsubscribeClaims=onValue(ref(db,`games/${GAME}/claims`),snap=>{claimData=snap.val()||{};renderClaims();processClaims();checkNewWinners()},error=>{$('claimStatus').textContent='Claim feed error: '+error.message})}
 $('loginBtn').addEventListener('click',async()=>{$('loginBtn').disabled=true;try{await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value);$('password').value=''}catch(error){loginStatus('Sign-in failed: '+error.message,true)}finally{$('loginBtn').disabled=false}});
-$('nextBtn').addEventListener('click',()=>updateGame(false));$('newBtn').addEventListener('click',()=>updateGame(true));$('logoutBtn').addEventListener('click',()=>signOut(auth));$('copyBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('joinUrl').value);alert('Join link copied.')}catch{alert('Copy the link from the box.')}});
+
+$('markSongBtn').addEventListener('click', markSelectedSong);
+
+$('songSelector').addEventListener('change', () => {
+  const selector = $('songSelector');
+  const selected = selector.options[selector.selectedIndex];
+
+  $('markSongBtn').disabled =
+    busy || !selected?.value || selected.disabled ||
+    !Array.isArray(currentState?.songs) ||
+    currentState.songs.length < 24;
+});
+
+  $('nextBtn').addEventListener('click',()=>updateGame(false));$('newBtn').addEventListener('click',()=>updateGame(true));$('logoutBtn').addEventListener('click',()=>signOut(auth));$('copyBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('joinUrl').value);alert('Join link copied.')}catch{alert('Copy the link from the box.')}});
 const playerURL=new URL(location.href);playerURL.pathname=playerURL.pathname.replace(/host\.html$/,'index.html');playerURL.search='';playerURL.hash='';$('joinUrl').value=playerURL.href;
 if(!config||!Array.isArray(songs)||!songs.length){loginStatus('Missing Firebase config or songs list. Check config.js and songs.js.',true);$('loginBtn').disabled=true}else{try{const app=initializeApp(config);auth=getAuth(app);db=getDatabase(app);$('total').textContent=songs.length;onAuthStateChanged(auth,connect,error=>loginStatus('Authentication error: '+error.message,true))}catch(error){loginStatus('Firebase setup failed: '+error.message,true);$('loginBtn').disabled=true}}
 </script></body></html>
