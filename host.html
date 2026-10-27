@@ -261,7 +261,7 @@ async function markSelectedSong() {
 
   async function updateGame(newGame){if(busy)return;if(newGame&&!confirm('Start a NEW GAME? This will clear played songs and reset player cards for everyone. The game code stays DUBEAM-01.'))return;busy=true;draw(currentState);try{const result=await runTransaction(ref(db,`games/${GAME}/currentSong`),previous=>{const old=previous&&typeof previous==='object'?previous:{};const round=Math.max(1,Number(old.round)||1);
 if(newGame){
-  const gameSongs = customSongs.length >= 24 ? customSongs : songs;
+  const gameSongs = customSongs.length >= 24 ? customSongs : (Array.isArray(old.songs) && old.songs.length >= 24 ? old.songs : songs);
   return {
     played: [],
     songs: gameSongs,
