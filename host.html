@@ -169,7 +169,34 @@
  <div class="winner-name" id="winnerName"></div><div class="winner-details" id="winnerDetails"></div>
  <div style="color:#9ef0ac;font-weight:800;margin-bottom:20px">✓ VERIFIED — Winning songs confirmed!</div>
  <button id="winnerDismiss" type="button">DISMISS ALERT</button></div></div>
-<script src="songs.js"></script><script src="config.js"></script>
+<div id="approvalOverlay" class="winner-overlay hide" role="alertdialog" aria-modal="true" aria-labelledby="approvalHeading" style="z-index:900">
+  <div class="winner-box">
+    <div id="approvalHeading" class="winner-heading">
+      🔔 NEW PLAYER REQUEST 🔔
+    </div>
+
+    <div id="approvalPlayerName" class="winner-name"></div>
+
+    <div class="winner-details">
+      Requesting access to Music Bingo
+    </div>
+
+    <div id="approvalQueueCount" style="color:#D4AF37;margin-bottom:20px"></div>
+
+    <button id="popupApprove" type="button" style="background:#15803d;color:white;margin:6px">
+      ✓ APPROVE
+    </button>
+
+    <button id="popupDeny" type="button" style="background:#b91c1c;color:white;margin:6px">
+      ✕ DENY
+    </button>
+
+    <button id="popupLater" type="button" style="margin:6px">
+      REVIEW LATER
+    </button>
+  </div>
+</div>
+  <script src="songs.js"></script><script src="config.js"></script>
 <script type="module">
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
@@ -177,7 +204,106 @@ import {getDatabase,ref,onValue,runTransaction,update,get,set} from 'https://www
 const $=id=>document.getElementById(id),GAME='DUBEAM-01',songs=window.DUBEAM_SONGS,config=window.DUBEAM_FIREBASE_CONFIG;
 
 let customSongs = [];
+let approvalActive = null; let approvalAudio = null; const approvalSoundPlayed = new Set();  document.addEventListener('click', () => {   try {     if (!approvalAudio) {       approvalAudio = new (window.AudioContext || window.webkitAudioContext)();     }     approvalAudio.resume().catch(() => {});   } catch (error) {} });  function playApprovalSound() {   try {     if (!approvalAudio || approvalAudio.state !== 'running') return;      const now = approvalAudio.currentTime;      [660, 880].forEach((frequency, i) => {       const tone = approvalAudio.createOscillator();       const volume = approvalAudio.createGain();       const start = now + i * 0.2;        tone.type = 'sine';       tone.frequency.value = frequency;       volume.gain.setValueAtTime(0.08, start);       volume.gain.exponentialRampToValueAtTime(0.001, start + 0.18);        tone.connect(volume);       volume.connect(approvalAudio.destination);       tone.start(start);       tone.stop(start + 0.2);     });   } catch (error) {} }
+let approvalBusy = false;
+const approvalDeferred = new Set();
 
+function syncApprovalPopup(players) {
+  const round = Number(currentState?.round);
+
+  const pending = Object.entries(players || {})
+    .filter(([uid, player]) =>
+      player.status === 'pending' &&
+      Number(player.round) === round
+    )
+    .map(([uid, player]) => ({
+      uid,
+      name: player.name,
+      round,
+      key: round + ':' + uid
+    }));
+
+  $('approvalQueueCount').textContent =
+    pending.length + ' player(s) waiting';
+
+  if (approvalBusy) return;
+
+  if (!$('winnerOverlay').classList.contains('hide')) {
+    $('approvalOverlay').classList.add('hide');
+    return;
+  }
+
+  const next = pending.find(
+    player => !approvalDeferred.has(player.key)
+  );
+
+  if (!next) {
+    approvalActive = null;
+    $('approvalOverlay').classList.add('hide');
+    return;
+  }
+
+  approvalActive = next;  if (!approvalSoundPlayed.has(next.key) &&     approvalAudio?.state === 'running') {   approvalSoundPlayed.add(next.key);   playApprovalSound(); }
+  $('approvalPlayerName').textContent = next.name;
+  $('approvalOverlay').classList.remove('hide');
+}
+
+async function respondToApproval(status) {
+  if (!approvalActive || approvalBusy) return;
+
+  const request = approvalActive;
+  approvalBusy = true;
+
+  $('popupApprove').disabled = true;
+  $('popupDeny').disabled = true;
+  $('popupLater').disabled = true;
+
+  try {
+    const result = await runTransaction(
+      ref(db, `games/${GAME}/players/${request.uid}`),
+      data => {
+        if (!data ||
+            data.status !== 'pending' ||
+            Number(data.round) !== request.round ||
+            Number(currentState?.round) !== request.round) {
+          return;
+        }
+
+        return { ...data, status };
+      }
+    );
+
+    if (!result.committed) {
+      alert('This request is no longer active.');
+    }
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    approvalBusy = false;
+    approvalActive = null;
+
+    $('popupApprove').disabled = false;
+    $('popupDeny').disabled = false;
+    $('popupLater').disabled = false;
+
+    syncApprovalPopup(playerData);
+  }
+}
+
+$('popupApprove').onclick = () =>
+  respondToApproval('approved');
+
+$('popupDeny').onclick = () =>
+  respondToApproval('denied');
+
+$('popupLater').onclick = () => {
+  if (approvalActive) {
+    approvalDeferred.add(approvalActive.key);
+  }
+
+  approvalActive = null;
+  syncApprovalPopup(playerData);
+};
 function readSongList(text) {
   const lines = text.replace(/^\uFEFF/, "")
     .split(/\r?\n/)
@@ -538,10 +664,10 @@ function verdict(claim){const round=Math.max(1,Number(currentState?.round)||1);i
 const card=seededShuffle(gameSongs,seed).slice(0,24);card.splice(12,0,'⭐ FREE SPACE ⭐');const number=String(hash(seed)%100000).padStart(5,'0');if(claim.cardNumber!==number||!Array.isArray(claim.marks)||claim.marks.length!==25||claim.marks.some(v=>typeof v!=='boolean')||claim.marks[12]!==true)return{status:'rejected',reason:'Card information does not match'};const played=Array.isArray(currentState?.played)?currentState.played:[];const verified=winLines().some(line=>line.every(i=>claim.marks[i]&&(i===12||played.includes(card[i]))));return{status:verified?'verified':'rejected',reason:verified?'Winning line confirmed':'No complete line of played songs'}}
 function renderClaims(){const round=Math.max(1,Number(currentState?.round)||1);const entries=Object.entries(claimData).filter(([,c])=>c&&c.round===round).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)).slice(0,30);$('claimCount').textContent=entries.length;const root=$('claims');root.replaceChildren();if(!entries.length){root.textContent='No BINGO claims this round yet.';return}for(const [id,c] of entries){const item=document.createElement('div');item.className='claim '+(c.status||'');const heading=document.createElement('strong');heading.textContent=(c.status==='verified'?'🏆 VERIFIED':c.status==='rejected'?'❌ NOT VERIFIED':'⏳ CHECKING')+' — '+String(c.name||'Player');const detail=document.createElement('div');detail.textContent='Card #'+String(c.cardNumber||'?')+' • Round '+c.round;const reason=document.createElement('small');reason.textContent=c.reason||'Waiting for host verification';item.append(heading,detail,reason);if(c.status==='verified'){const replay=document.createElement('button');replay.type='button';replay.textContent='🏆 SHOW WINNER ALERT';replay.style.marginTop='10px';replay.addEventListener('click',()=>{winnerQueue.push(c);showNextWinner()});item.appendChild(replay)}root.appendChild(item)}}
 async function processClaims(){if(!currentState||!auth?.currentUser||auth.currentUser.isAnonymous)return;const round=Math.max(1,Number(currentState.round)||1);for(const [id,c] of Object.entries(claimData)){if(!c||c.status!=='pending'||processing.has(id))continue;processing.add(id);try{const v=verdict(c);await update(ref(db,`games/${GAME}/claims/${id}`),{status:v.status,reason:v.reason,checkedAt:Date.now()});$('claimStatus').textContent='Last claim checked: '+String(c.name||'Player')}catch(e){$('claimStatus').textContent='Claim verification failed: '+e.message}finally{processing.delete(id)}}}
-function showNextWinner(){if(winnerOpen||!winnerQueue.length)return;const claim=winnerQueue.shift();winnerOpen=true;$('winnerName').textContent=String(claim.name||'Player');$('winnerDetails').textContent='Card #'+String(claim.cardNumber||'?')+' • Round '+claim.round;$('winnerOverlay').classList.remove('hide');$('winnerDismiss').focus()}
-$('winnerDismiss').addEventListener('click',()=>{$('winnerOverlay').classList.add('hide');winnerOpen=false;showNextWinner()});
+function showNextWinner(){if(winnerOpen||!winnerQueue.length)return;const claim=winnerQueue.shift();winnerOpen=true;$('approvalOverlay').classList.add('hide');$('winnerName').textContent=String(claim.name||'Player');$('winnerDetails').textContent='Card #'+String(claim.cardNumber||'?')+' • Round '+claim.round;$('winnerOverlay').classList.remove('hide');$('winnerDismiss').focus()}
+$('winnerDismiss').addEventListener('click',()=>{$('winnerOverlay').classList.add('hide');winnerOpen=false;showNextWinner();syncApprovalPopup(playerData)});
 function checkNewWinners(){const round=Math.max(1,Number(currentState?.round)||1);const verified=Object.entries(claimData).filter(([,c])=>c&&c.round===round&&c.status==='verified');if(!claimsLoaded){verified.forEach(([id])=>seenClaims.add(id));claimsLoaded=true;return}for(const [id,claim] of verified){if(seenClaims.has(id))continue;seenClaims.add(id);winnerQueue.push(claim)}showNextWinner()}
-function renderPlayers(players) {     const list = $('playerList');     list.replaceChildren();      const round = Number(currentState?.round);     const entries = Object.entries(players).filter(         ([uid, player]) => Number(player.round) === round     );      const pending = entries.filter(         ([uid, player]) => player.status === 'pending'     );      const approved = entries.filter(         ([uid, player]) => player.status === 'approved'     );      $('playerCounts').textContent =         'Waiting: ' + pending.length +         ' | Approved: ' + approved.length;      if (!entries.length) {         list.textContent = 'No players waiting for approval.';         return;     }      entries.forEach(([uid, player]) => {         const row = document.createElement('div');         row.className = 'claim';          const name = document.createElement('strong');         name.textContent = player.name + ' - ' + player.status;         row.appendChild(name);          if (player.status === 'pending') {             ['approved', 'denied'].forEach(status => {                 const btn = document.createElement('button');                 btn.textContent = status === 'approved'                     ? 'APPROVE' : 'DENY';                  btn.onclick = async () => {                     btn.disabled = true;                     try {                         await runTransaction(                             ref(db, `games/${GAME}/players/${uid}`),                             data => {                                 if (!data ||                                     data.status !== 'pending' ||                                     Number(data.round) !== Number(currentState?.round)) {                                     return;                                 }                                 return { ...data, status };                             }                         );                     } catch (error) {                         alert(error.message);                     } finally {                         btn.disabled = false;                     }                 };                  row.appendChild(btn);             });         }          list.appendChild(row);     }); }  let playerData = {}; let unsubscribePlayers = null;  function connect(user){     if (unsubscribePlayers) {         unsubscribePlayers();         unsubscribePlayers = null;     }      if (user && !user.isAnonymous) {         unsubscribePlayers = onValue(             ref(db, `games/${GAME}/players`),             snapshot => {                 playerData = snapshot.val() || {}; renderPlayers(playerData);             },             error => {                 $('playerList').textContent =                     'Player feed error: ' + error.message;             }         );     }if(unsubscribe){unsubscribe();unsubscribe=null}if(unsubscribeClaims){unsubscribeClaims();unsubscribeClaims=null}const authorized=!!user&&!user.isAnonymous;
+function renderPlayers(players) { syncApprovalPopup(players);     const list = $('playerList');     list.replaceChildren();      const round = Number(currentState?.round);     const entries = Object.entries(players).filter(         ([uid, player]) => Number(player.round) === round     );      const pending = entries.filter(         ([uid, player]) => player.status === 'pending'     );      const approved = entries.filter(         ([uid, player]) => player.status === 'approved'     );      $('playerCounts').textContent =         'Waiting: ' + pending.length +         ' | Approved: ' + approved.length;      if (!entries.length) {         list.textContent = 'No players waiting for approval.';         return;     }      entries.forEach(([uid, player]) => {         const row = document.createElement('div');         row.className = 'claim';          const name = document.createElement('strong');         name.textContent = player.name + ' - ' + player.status;         row.appendChild(name);          if (player.status === 'pending') {             ['approved', 'denied'].forEach(status => {                 const btn = document.createElement('button');                 btn.textContent = status === 'approved'                     ? 'APPROVE' : 'DENY';                  btn.onclick = async () => {                     btn.disabled = true;                     try {                         await runTransaction(                             ref(db, `games/${GAME}/players/${uid}`),                             data => {                                 if (!data ||                                     data.status !== 'pending' ||                                     Number(data.round) !== Number(currentState?.round)) {                                     return;                                 }                                 return { ...data, status };                             }                         );                     } catch (error) {                         alert(error.message);                     } finally {                         btn.disabled = false;                     }                 };                  row.appendChild(btn);             });         }          list.appendChild(row);     }); }  let playerData = {}; let unsubscribePlayers = null;  function connect(user){     if (unsubscribePlayers) {         unsubscribePlayers();         unsubscribePlayers = null;     }      if (user && !user.isAnonymous) {         unsubscribePlayers = onValue(             ref(db, `games/${GAME}/players`),             snapshot => {                 playerData = snapshot.val() || {}; renderPlayers(playerData);             },             error => {                 $('playerList').textContent =                     'Player feed error: ' + error.message;             }         );     }if(unsubscribe){unsubscribe();unsubscribe=null}if(unsubscribeClaims){unsubscribeClaims();unsubscribeClaims=null}const authorized=!!user&&!user.isAnonymous;
       $('lockGameBtn').disabled = true;      
                        if (authorized) {
   $('saveAccessBtn').disabled = true;
