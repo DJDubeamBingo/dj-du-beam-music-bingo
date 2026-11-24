@@ -60,7 +60,19 @@ function chooseMode(mode) {
 <h2>Join Game</h2>
 <input id="name" placeholder="Your name" maxlength="60" autocomplete="name"><br><br>
 <input id="code" value="DUBEAM-01" readonly aria-label="Event code"><br><br>
-<button id="joinBtn" type="button" disabled>JOIN GAME →</button>
+<div id="entryCodePanel" class="hide">
+  <label for="playerEntryCode">Game Entry Code</label>
+  <input
+    id="playerEntryCode"
+    type="text"
+    inputmode="numeric"
+    maxlength="6"
+    autocomplete="off"
+    placeholder="Enter 6-digit code"
+  >
+  <div id="approvalStatus" role="status"></div>
+</div>
+  <button id="joinBtn" type="button" disabled>JOIN GAME →</button>
 <p class="small">No app download needed.</p><div id="connection" class="live-note" role="status">Connecting to Firebase…</div>
 </section>
 
@@ -110,6 +122,12 @@ const $=id=>document.getElementById(id),GAME='DUBEAM-01';
 let card=[],marks=[],played=[],connected=false,ready=false,round=1,playerName='',db,auth,claimBusy=false,unsubscribeClaim=null;
 
 let activeSongs = window.DUBEAM_SONGS;
+  let accessMode = null;
+let gameLocked = true;
+let playerApproved = false;
+let accessLoaded = false;
+let unsubscribeAccess = null;
+let unsubscribeApproval = null;
 
 const SAVE_KEY = 'DUBEAM_BINGO_PLAYER_V1';
 
@@ -189,8 +207,50 @@ try{
  }catch(error){result.className='status bad';result.textContent='Claim could not be sent: '+error.message}
  finally{claimBusy=false;$('claimBtn').disabled=alreadyWon}
 }
-function join(){if(!ready||!connected){alert('Please wait for the live connection.');return}const name=$('name').value.trim();if(!name){alert('Enter your name.');return}
-const saved = loadSavedCard();
+async function join(){if(!ready||!auth.currentUser){alert('Please wait for the live connection.');return}const name=$('name').value.trim();if(!name){alert('Enter your name.');return}
+if (!accessLoaded) {
+  alert('Please wait for game access settings.');
+  return;
+}
+
+if (gameLocked && !playerApproved) {
+  alert('The DJ has locked the game.');
+  return;
+}
+
+if (accessMode !== 'free' && !playerApproved) {
+    const code = $('playerEntryCode').value.trim();
+    const message = $('approvalStatus');
+
+    if (!/^\d{6}$/.test(code)) {
+        message.textContent = 'Enter a valid 6-digit game code.';
+        return;
+    }
+
+    try {
+        await set(
+            ref(db, `games/${GAME}/players/${auth.currentUser.uid}`),
+            {
+                name: name,
+                entryCode: code,
+                status: 'pending',
+                round: round,
+                requestedAt: Date.now()
+            }
+        );
+
+        message.textContent = 'Request sent! Waiting for DJ approval.';
+    } catch (error) {
+        message.textContent = 'Unable to join. Check your game code or contact the DJ.';
+    }
+
+    return;
+}
+    if (!connected) {
+  alert('Please wait for the song feed to connect.');
+  return;
+}            
+                      const saved = loadSavedCard();
 
 playerName = name;
 setCard();
@@ -233,7 +293,35 @@ else{try{
  onAuthStateChanged(auth,async user=>{
   if(!user){try{await signInAnonymously(auth)}catch(error){note('connection','Anonymous sign-in failed: '+error.message,true)}return}
   if(ready)return;ready=true;
-  onValue(ref(db,`games/${GAME}/currentSong`),snapshot=>{
+   onValue(ref(db, `games/${GAME}/access/mode`), snapshot => {
+  accessMode = snapshot.val() || 'free';
+  accessLoaded = true;
+     $('joinBtn').disabled = false;
+     if (accessMode === 'free') {
+    connectSongFeed();
+}
+
+  $('entryCodePanel').classList.toggle(
+    'hide', accessMode === 'free'
+  );
+}, error => {
+  accessLoaded = false;
+  $('joinBtn').disabled = true;
+  $('approvalStatus').textContent = error.message;
+});
+
+onValue(ref(db, `games/${GAME}/access/locked`), snapshot => {
+  gameLocked = snapshot.val() === true;
+}, error => {
+  gameLocked = true;
+  $('joinBtn').disabled = true;
+});
+  let unsubscribeSongs = null;
+
+function connectSongFeed() {
+  if (unsubscribeSongs) return;
+
+  unsubscribeSongs = onValue(ref(db,`games/${GAME}/currentSong`),snapshot=>{
    const value=snapshot.val(),nextRound=Math.max(1,Number(value?.round)||1),roundChanged=nextRound!==round;
   
 
@@ -361,8 +449,32 @@ if (playerName && (roundChanged || playlistChanged)) {
     note('liveStatus', 'NEW GAME! Round ' + round + ' • Your songs changed and marks were cleared.');
 }
    else if(playerName){note('liveStatus','Round '+round+' • Live feed connected • '+played.length+' songs played')}
-  },error=>{connected=false;$('joinBtn').disabled=true;note('connection','Firebase read failed: '+error.message,true);note('liveStatus','Live connection failed: '+error.message,true)});
- },error=>note('connection','Authentication failed: '+error.message,true));
+  },error=>{unsubscribeSongs=null;connected=false;$('joinBtn').disabled=!accessLoaded;note('connection','Firebase read failed: '+error.message,true);note('liveStatus','Live connection failed: '+error.message,true)});
+}
+   onValue(ref(db, `games/${GAME}/currentSong/round`), snapshot => {
+  const nextRound = Math.max(1, Number(snapshot.val()) || 1);  if (nextRound !== round && accessMode !== 'free') {     playerApproved = false;      if (unsubscribeSongs) {         unsubscribeSongs();         unsubscribeSongs = null;     }      connected = false;     playerName = '';      $('game').classList.add('hide');     $('join').classList.remove('hide');     $('playerEntryCode').value = '';     $('joinBtn').disabled = !accessLoaded;     $('approvalStatus').textContent =         'New game! Enter the new game code.'; }  if (accessMode !== 'free') {     round = nextRound; }
+});
+   onValue(ref(db, `games/${GAME}/players/${user.uid}`), snapshot => {
+    const player = snapshot.val();
+
+    playerApproved = !!player &&
+        player.status === 'approved' &&
+        Number(player.round) === round;
+
+    if (playerApproved) {
+        $('approvalStatus').textContent = 'Approved! You may join.';
+          $('joinBtn').disabled = false;
+    connectSongFeed();
+    } else if (player && player.status === 'pending') {
+        $('approvalStatus').textContent = 'Waiting for DJ approval...';
+    } else {
+        $('approvalStatus').textContent = '';
+    }
+}, error => {
+    playerApproved = false;
+    $('approvalStatus').textContent = error.message;
+});
+},error=>note('connection','Authentication failed: '+error.message,true));
 }catch(error){note('connection','Firebase setup failed: '+error.message,true)}}
 </script>
 </body>
