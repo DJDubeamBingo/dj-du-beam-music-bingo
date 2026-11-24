@@ -149,7 +149,7 @@ function loadSavedCard() {
 function seededShuffle(a,seed){let x=[...a],h=2166136261;for(const c of seed)h=Math.imul(h^c.charCodeAt(0),16777619)>>>0;for(let i=x.length-1;i>0;i--){h=(Math.imul(h,1664525)+1013904223)>>>0;const j=h%(i+1);[x[i],x[j]]=[x[j],x[i]]}return x}
 function note(id,message,error=false){$(id).textContent=message;$(id).className='live-note'+(error?' live-error':'')}
 
-function render(){savePlayerCard();
+function render(){
 const grid=$('grid');grid.replaceChildren();card.forEach((song,i)=>{const cell=document.createElement('button');cell.type='button';cell.className='cell'+(marks[i]?' marked':'')+(i===12?' free':'');cell.textContent=song;cell.addEventListener('click',()=>{if(i!==12){
 marks[i]=!marks[i];savePlayerCard();
 $('result').textContent='';render()}});grid.appendChild(cell)})}
@@ -213,7 +213,18 @@ if (
 
 savePlayerCard();
 $('join').classList.add('hide');$('game').classList.remove('hide');note('liveStatus','Round '+round+' • Live feed connected • '+played.length+' songs played')}
-$('joinBtn').addEventListener('click',join);$('claimBtn').addEventListener('click',claim);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    savePlayerCard();
+  }
+});
+
+window.addEventListener('pagehide', () => {
+  savePlayerCard();
+});
+
+  $('joinBtn').addEventListener('click',join);$('claimBtn').addEventListener('click',claim);
 const requestedCode=new URL(location.href).searchParams.get('code');
 if(requestedCode&&requestedCode.toUpperCase()!==GAME){note('connection','This build only supports '+GAME+'.',true)}
 else if(!window.DUBEAM_FIREBASE_CONFIG||!Array.isArray(window.DUBEAM_SONGS)||window.DUBEAM_SONGS.length<24){note('connection','Missing Firebase configuration or song list.',true)}
@@ -344,7 +355,11 @@ if (!playerName) {
 }
 
    note('connection','Connected! Enter your name to join.');
-  if(playerName&&(roundChanged||playlistChanged)){setCard();note('liveStatus','NEW GAME! Round '+round+' • Your songs changed and marks were cleared.')}
+if (playerName && (roundChanged || playlistChanged)) {
+    setCard();
+    savePlayerCard();
+    note('liveStatus', 'NEW GAME! Round ' + round + ' • Your songs changed and marks were cleared.');
+}
    else if(playerName){note('liveStatus','Round '+round+' • Live feed connected • '+played.length+' songs played')}
   },error=>{connected=false;$('joinBtn').disabled=true;note('connection','Firebase read failed: '+error.message,true);note('liveStatus','Live connection failed: '+error.message,true)});
  },error=>note('connection','Authentication failed: '+error.message,true));
