@@ -465,11 +465,16 @@ if (playerName && (roundChanged || playlistChanged)) {
         $('approvalStatus').textContent = 'Approved! You may join.';
           $('joinBtn').disabled = false;
     connectSongFeed();
-    } else if (player && player.status === 'pending') {
-        $('approvalStatus').textContent = 'Waiting for DJ approval...';
-    } else {
-        $('approvalStatus').textContent = '';
-    }
+  } else if (player && player.status === 'denied' && Number(player.round) === round && accessMode !== 'free') {
+  $('approvalStatus').textContent = 'Access denied by DJ. Please wait for the next game.';
+  $('joinBtn').disabled = true;
+} else if (player && player.status === 'pending' && Number(player.round) === round && accessMode !== 'free') {
+  $('approvalStatus').textContent = 'Waiting for DJ approval...';
+  $('joinBtn').disabled = true;
+} else {
+  $('approvalStatus').textContent = '';
+  $('joinBtn').disabled = !accessLoaded;
+}
 }, error => {
     playerApproved = false;
     $('approvalStatus').textContent = error.message;
