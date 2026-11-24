@@ -507,9 +507,36 @@ function showNextWinner(){if(winnerOpen||!winnerQueue.length)return;const claim=
 $('winnerDismiss').addEventListener('click',()=>{$('winnerOverlay').classList.add('hide');winnerOpen=false;showNextWinner()});
 function checkNewWinners(){const round=Math.max(1,Number(currentState?.round)||1);const verified=Object.entries(claimData).filter(([,c])=>c&&c.round===round&&c.status==='verified');if(!claimsLoaded){verified.forEach(([id])=>seenClaims.add(id));claimsLoaded=true;return}for(const [id,claim] of verified){if(seenClaims.has(id))continue;seenClaims.add(id);winnerQueue.push(claim)}showNextWinner()}
 function connect(user){if(unsubscribe){unsubscribe();unsubscribe=null}if(unsubscribeClaims){unsubscribeClaims();unsubscribeClaims=null}const authorized=!!user&&!user.isAnonymous;
+              if (authorized) {
+  $('saveAccessBtn').disabled = true;
+
+  get(ref(db, `games/${GAME}/access`))
+    .then(snapshot => {
+      if (auth.currentUser?.uid !== user.uid) return;
+
+      const settings = snapshot.val();
+
+      if (settings) {
+        $('accessMode').value = settings.mode || 'free';
+
+        $('entryCode').textContent =
+          settings.entryCode || 'NOT GENERATED';
+
+        $('accessStatus').textContent =
+          'Saved access settings loaded!';
+      }
+
+      $('saveAccessBtn').disabled = false;
+    })
+    .catch(error => {
+      $('saveAccessBtn').disabled = true;
+      $('accessStatus').textContent =
+        'Unable to load settings: ' + error.message;
+    });
+}         
 
 $('generateCodeBtn').disabled = !authorized;
-$('saveAccessBtn').disabled = !authorized;$('loginPanel').classList.toggle('hide',authorized);$('dashboard').classList.toggle('hide',!authorized);if(!authorized){loginStatus(user?'Sign in using your DJ email/password account.':'Sign in with your DJ email and password.',!!user);if(user)signOut(auth).catch(console.error);return}unsubscribe=onValue(ref(db,`games/${GAME}/currentSong`),snap=>{draw(snap.val());status('Connected to Firebase. Ready for live song tracking.')},error=>status('Firebase read failed: '+error.message,true));unsubscribeClaims=onValue(ref(db,`games/${GAME}/claims`),snap=>{claimData=snap.val()||{};renderClaims();processClaims();checkNewWinners()},error=>{$('claimStatus').textContent='Claim feed error: '+error.message})}
+$('saveAccessBtn').disabled = true;$('loginPanel').classList.toggle('hide',authorized);$('dashboard').classList.toggle('hide',!authorized);if(!authorized){loginStatus(user?'Sign in using your DJ email/password account.':'Sign in with your DJ email and password.',!!user);if(user)signOut(auth).catch(console.error);return}unsubscribe=onValue(ref(db,`games/${GAME}/currentSong`),snap=>{draw(snap.val());status('Connected to Firebase. Ready for live song tracking.')},error=>status('Firebase read failed: '+error.message,true));unsubscribeClaims=onValue(ref(db,`games/${GAME}/claims`),snap=>{claimData=snap.val()||{};renderClaims();processClaims();checkNewWinners()},error=>{$('claimStatus').textContent='Claim feed error: '+error.message})}
 $('loginBtn').addEventListener('click',async()=>{$('loginBtn').disabled=true;try{await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value);$('password').value=''}catch(error){loginStatus('Sign-in failed: '+error.message,true)}finally{$('loginBtn').disabled=false}});
 
 $('markSongBtn').addEventListener('click', markSelectedSong);
