@@ -34,11 +34,25 @@ button:disabled{opacity:.55;cursor:not-allowed}
 <script>
 let playerMode = '';
 
+
 function chooseMode(mode) {
   playerMode = mode;
-  document.getElementById('welcome').classList.add('hide');
-  document.getElementById('join').classList.remove('hide');
+
+  document.getElementById('liveVideoPanel')
+    .classList.toggle('hide', mode !== 'live');
+
+  document.getElementById('liveVideoContainer')
+    .classList.add('hide');
+
+  document.getElementById('welcome')
+    .classList.add('hide');
+
+  document.getElementById('join')
+    .classList.remove('hide');
+
+  window.refreshLiveVideo?.();
 }
+
 </script>
 
 <section id="join" class="panel hide">
@@ -49,7 +63,35 @@ function chooseMode(mode) {
 <button id="joinBtn" type="button" disabled>JOIN GAME →</button>
 <p class="small">No app download needed.</p><div id="connection" class="live-note" role="status">Connecting to Firebase…</div>
 </section>
+
 <section id="game" class="panel hide">
+
+  <div id="liveVideoPanel" class="hide"
+       style="margin-bottom:20px">
+
+    <h2 style="color:#f6c84c;text-align:center">
+      🔴 DJ DU BEAM LIVE
+    </h2>
+
+    <div id="liveVideoStatus" class="status"
+         style="text-align:center">
+      Waiting for DJ DU BEAM to go live...
+    </div>
+
+    <div id="liveVideoContainer"
+         style="width:100%;aspect-ratio:16/9;background:#000;border:2px solid #b67a00;border-radius:12px;overflow:hidden">
+
+      <iframe id="streamPlayer"
+              title="DJ DU BEAM Live"
+              style="width:100%;height:100%;border:0"
+              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+              allowfullscreen>
+      </iframe>
+
+    </div>
+
+  </div>
+
 <div id="playerLine" class="status"></div>
 <div id="liveStatus" class="live-note" role="status">Connecting to live songs…</div>
 <div class="headers"><div>B</div><div>I</div><div>N</div><div>G</div><div>O</div></div>
@@ -121,6 +163,94 @@ else{try{
   onValue(ref(db,`games/${GAME}/currentSong`),snapshot=>{
    const value=snapshot.val(),nextRound=Math.max(1,Number(value?.round)||1),roundChanged=nextRound!==round;
   
+
+window.refreshLiveVideo = function() {
+  const frame = $('streamPlayer');
+  const container = $('liveVideoContainer');
+  const message = $('liveVideoStatus');
+
+  let embed = '';
+  let external = '';
+
+  try {
+    const url = new URL(value?.liveUrl || '');
+    const host = url.hostname.toLowerCase();
+
+    if (url.protocol === 'https:') {
+
+      if (['facebook.com', 'www.facebook.com',
+           'm.facebook.com'].includes(host)) {
+        embed = 'https://www.facebook.com/plugins/video.php?href='
+          + encodeURIComponent(url.href)
+          + '&show_text=false';
+      }
+
+      else if (['youtube.com', 'www.youtube.com',
+                'm.youtube.com', 'youtu.be'].includes(host)) {
+        const id = host === 'youtu.be'
+          ? url.pathname.split('/')[1]
+          : url.searchParams.get('v')
+            || url.pathname.match(/^\/live\/([^/]+)/)?.[1];
+
+        if (/^[A-Za-z0-9_-]{11}$/.test(id || '')) {
+          embed = 'https://www.youtube.com/embed/' + id;
+        }
+      }
+
+      else if (['twitch.tv', 'www.twitch.tv'].includes(host)) {
+        const channel = url.pathname.split('/')[1];
+
+        if (/^[A-Za-z0-9_]+$/.test(channel || '')) {
+          embed = 'https://player.twitch.tv/?channel='
+            + encodeURIComponent(channel)
+            + '&parent=' + encodeURIComponent(location.hostname)
+            + '&autoplay=false';
+        }
+      }
+
+      else if (['tiktok.com', 'www.tiktok.com'].includes(host)) {
+        external = url.href;
+      }
+    }
+  } catch {}
+
+  message.replaceChildren();
+
+  if (playerMode !== 'live') {
+    frame.removeAttribute('src');
+    container.classList.add('hide');
+    return;
+  }
+
+  if (embed) {
+    if (frame.getAttribute('src') !== embed) {
+      frame.src = embed;
+    }
+
+    container.classList.remove('hide');
+    message.textContent = 'Press play to watch DJ DU BEAM!';
+  } else {
+    frame.removeAttribute('src');
+    container.classList.add('hide');
+
+    if (external) {
+      const link = document.createElement('a');
+      link.href = external;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.style.color = '#f6c84c';
+      link.textContent = 'WATCH TIKTOK LIVE';
+      message.appendChild(link);
+    } else {
+      message.textContent = 'Waiting for DJ DU BEAM to go live...';
+    }
+  }
+};
+
+window.refreshLiveVideo();
+
+
+
 const nextSongs = Array.isArray(value?.songs) && value.songs.length >= 24
   ? value.songs
   : window.DUBEAM_SONGS;
