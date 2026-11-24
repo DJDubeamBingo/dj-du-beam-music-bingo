@@ -267,7 +267,42 @@ $('generateCodeBtn').addEventListener('click', () => {
   $('accessStatus').textContent =
     'New code generated. Save settings to activate.';
 });
-async function saveAccessSettings() {
+async function toggleGameLock() {
+  const message = $('accessStatus');
+
+  if (!auth?.currentUser || auth.currentUser.isAnonymous) {
+    return;
+  }
+
+  $('lockGameBtn').disabled = true;
+
+  try {
+    const result = await runTransaction(
+      ref(db, `games/${GAME}/access/locked`),
+      locked => locked !== true
+    );
+
+    const locked = result.snapshot.val() === true;
+
+    $('lockGameBtn').textContent = locked
+      ? '🔓 UNLOCK GAME'
+      : '🔒 LOCK GAME';
+
+    message.textContent = locked
+      ? 'Game lock saved.'
+      : 'Game unlock saved.';
+
+  } catch (error) {
+    message.textContent =
+      'Unable to change lock: ' + error.message;
+  } finally {
+    $('lockGameBtn').disabled =
+      !auth?.currentUser || auth.currentUser.isAnonymous;
+  }
+}
+
+$('lockGameBtn').addEventListener('click', toggleGameLock);
+  async function saveAccessSettings() {
   const message = $('accessStatus');
 
   if (!auth?.currentUser || auth.currentUser.isAnonymous) {
@@ -507,7 +542,8 @@ function showNextWinner(){if(winnerOpen||!winnerQueue.length)return;const claim=
 $('winnerDismiss').addEventListener('click',()=>{$('winnerOverlay').classList.add('hide');winnerOpen=false;showNextWinner()});
 function checkNewWinners(){const round=Math.max(1,Number(currentState?.round)||1);const verified=Object.entries(claimData).filter(([,c])=>c&&c.round===round&&c.status==='verified');if(!claimsLoaded){verified.forEach(([id])=>seenClaims.add(id));claimsLoaded=true;return}for(const [id,claim] of verified){if(seenClaims.has(id))continue;seenClaims.add(id);winnerQueue.push(claim)}showNextWinner()}
 function connect(user){if(unsubscribe){unsubscribe();unsubscribe=null}if(unsubscribeClaims){unsubscribeClaims();unsubscribeClaims=null}const authorized=!!user&&!user.isAnonymous;
-              if (authorized) {
+      $('lockGameBtn').disabled = true;      
+                       if (authorized) {
   $('saveAccessBtn').disabled = true;
 
   get(ref(db, `games/${GAME}/access`))
@@ -515,7 +551,12 @@ function connect(user){if(unsubscribe){unsubscribe();unsubscribe=null}if(unsubsc
       if (auth.currentUser?.uid !== user.uid) return;
 
       const settings = snapshot.val();
+$('lockGameBtn').textContent =
+  settings?.locked === true
+    ? '🔓 UNLOCK GAME'
+    : '🔒 LOCK GAME';
 
+$('lockGameBtn').disabled = false;
       if (settings) {
         $('accessMode').value = settings.mode || 'free';
 
