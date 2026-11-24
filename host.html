@@ -21,7 +21,52 @@
 <section class="panel" id="loginPanel"><h2>DJ Login</h2><input class="host-field" id="email" type="email" placeholder="DJ email" autocomplete="username"><input class="host-field" id="password" type="password" placeholder="Password" autocomplete="current-password"><button id="loginBtn" type="button">SIGN IN</button><div class="host-note" id="loginStatus" role="status">Checking connection…</div></section>
 <div id="dashboard" class="hide"><section class="panel"><div class="bigcode" id="gameCode">DUBEAM-01</div><p class="sub">Game <span id="roundNumber">1</span> • Throwback R&amp;B + Hip-Hop</p><p class="small">Permanent code and join link. Press NEXT SONG after playing that track in VirtualDJ.</p><div class="row"><button id="nextBtn" type="button">▶ NEXT SONG</button><button id="newBtn" class="secondary" type="button">✦ NEW GAME</button><button id="logoutBtn" class="secondary" type="button">SIGN OUT</button></div><div class="host-note" id="syncStatus" role="status"></div></section>
 
+
+<section class="panel" id="streamPanel">
+
+  <h2 style="color:#f6c84c">
+    🔴 LIVE STREAM CONTROL
+  </h2>
+
+  <p class="small">
+    Connect your live broadcast to Music Bingo.
+  </p>
+
+  <label for="streamPlatform">Streaming Platform</label>
+
+  <select id="streamPlatform" class="host-field">
+    <option value="facebook">Facebook Live</option>
+    <option value="youtube">YouTube Live</option>
+    <option value="twitch">Twitch</option>
+    <option value="tiktok">TikTok Live</option>
+  </select>
+
+  <label for="streamURL">Live Stream Link</label>
+
+  <input id="streamURL"
+         type="url"
+         class="host-field"
+         placeholder="Paste your live stream link here">
+
+  <button id="publishStreamBtn" type="button">
+    🔴 PUBLISH LIVE STREAM
+  </button>
+
+  <br><br>
+
+  <button id="endStreamBtn" type="button"
+          class="danger">
+    ⏹ REMOVE LIVE STREAM
+  </button>
+
+  <div id="streamStatus" class="host-note">
+    No live stream published.
+  </div>
+
+</section>
+
 <section class="panel" id="playlistPanel">
+
   <h2>🎵 CUSTOM SONG PLAYLIST</h2>
   <p class="small">
     Upload your own song list and choose how many songs
@@ -156,8 +201,81 @@ $("loadPlaylistBtn").addEventListener(
   loadCustomPlaylist
 );
   
-let auth,db,unsubscribe=null,unsubscribeClaims=null,busy=false,currentState=null,claimData={},processing=new Set(),seenClaims=new Set(),claimsLoaded=false,winnerQueue=[],winnerOpen=false;
-function status(message,error=false){$('syncStatus').textContent=message;$('syncStatus').className='host-note '+(error?'host-error':'host-ok')}
+
+  let auth,db,unsubscribe=null,unsubscribeClaims=null,busy=false,currentState=null,claimData={},processing=new Set(),seenClaims=new Set(),claimsLoaded=false,winnerQueue=[],winnerOpen=false;
+
+async function saveLiveStream(remove = false) {
+  const message = $('streamStatus');
+  const platform = $('streamPlatform').value;
+
+  if (!auth?.currentUser || auth.currentUser.isAnonymous) {
+    message.textContent = 'Please sign in as DJ first.';
+    return;
+  }
+
+  let liveUrl = '';
+
+  if (!remove) {
+    try {
+      const url = new URL($('streamURL').value.trim());
+
+      const allowed = {
+        facebook: ['facebook.com', 'www.facebook.com', 'm.facebook.com'],
+        youtube: ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'],
+        twitch: ['twitch.tv', 'www.twitch.tv'],
+        tiktok: ['tiktok.com', 'www.tiktok.com']
+      };
+
+      if (
+        url.protocol !== 'https:' ||
+        !allowed[platform]?.includes(url.hostname)
+      ) {
+        throw new Error('Invalid platform link');
+      }
+
+      liveUrl = url.href;
+
+    } catch {
+      message.textContent =
+        'Enter a valid link for the selected platform.';
+      return;
+    }
+  }
+
+  $('publishStreamBtn').disabled = true;
+  $('endStreamBtn').disabled = true;
+
+  try {
+    await update(ref(db, `games/${GAME}/currentSong`), {
+      liveUrl: liveUrl,
+      livePlatform: remove ? '' : platform
+    });
+
+    message.textContent = remove
+      ? 'Live stream removed from Bingo.'
+      : 'Live stream link published successfully!';
+
+    if (remove) $('streamURL').value = '';
+
+  } catch (error) {
+    message.textContent = 'Unable to update stream: ' + error.message;
+
+  } finally {
+    $('publishStreamBtn').disabled = false;
+    $('endStreamBtn').disabled = false;
+  }
+}
+
+$('publishStreamBtn').addEventListener('click', () => {
+  saveLiveStream(false);
+});
+
+$('endStreamBtn').addEventListener('click', () => {
+  saveLiveStream(true);
+});
+
+
+  function status(message,error=false){$('syncStatus').textContent=message;$('syncStatus').className='host-note '+(error?'host-error':'host-ok')}
 function loginStatus(message,error=false){$('loginStatus').textContent=message;$('loginStatus').className='host-note '+(error?'host-error':'')}
 function hash(s){let h=0;for(const c of s)h=(Math.imul(h,31)+c.charCodeAt(0))>>>0;return h}
 function seededShuffle(a,seed){let x=[...a],h=2166136261;for(const c of seed)h=Math.imul(h^c.charCodeAt(0),16777619)>>>0;for(let i=x.length-1;i>0;i--){h=(Math.imul(h,1664525)+1013904223)>>>0;const j=h%(i+1);[x[i],x[j]]=[x[j],x[i]]}return x}
@@ -262,13 +380,17 @@ async function markSelectedSong() {
   async function updateGame(newGame){if(busy)return;if(newGame&&!confirm('Start a NEW GAME? This will clear played songs and reset player cards for everyone. The game code stays DUBEAM-01.'))return;busy=true;draw(currentState);try{const result=await runTransaction(ref(db,`games/${GAME}/currentSong`),previous=>{const old=previous&&typeof previous==='object'?previous:{};const round=Math.max(1,Number(old.round)||1);
 if(newGame){
   const gameSongs = customSongs.length >= 24 ? customSongs : (Array.isArray(old.songs) && old.songs.length >= 24 ? old.songs : songs);
-  return {
+
+return {
     played: [],
     songs: gameSongs,
     order: shuffledIndexes(gameSongs.length),
     round: round + 1,
+    liveUrl: old.liveUrl || '',
+    livePlatform: old.livePlatform || '',
     updatedAt: Date.now()
-  };
+};
+
 }
 
 const gameSongs = Array.isArray(old.songs) && old.songs.length >= 24 ? old.songs : songs;
