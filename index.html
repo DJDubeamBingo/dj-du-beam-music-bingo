@@ -110,10 +110,49 @@ const $=id=>document.getElementById(id),GAME='DUBEAM-01';
 let card=[],marks=[],played=[],connected=false,ready=false,round=1,playerName='',db,auth,claimBusy=false,unsubscribeClaim=null;
 
 let activeSongs = window.DUBEAM_SONGS;
-let alreadyWon = false;function hash(s){let h=0;for(const c of s)h=(Math.imul(h,31)+c.charCodeAt(0))>>>0;return h}
+
+const SAVE_KEY = 'DUBEAM_BINGO_PLAYER_V1';
+
+function savePlayerCard() {
+  if (!playerName || card.length !== 25) return;
+
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      game: GAME,
+      name: playerName,
+      round: round,
+      mode: playerMode,
+      card: [...card],
+      marks: [...marks],
+      alreadyWon: alreadyWon
+    }));
+  } catch (error) {
+    console.warn('Unable to save Bingo card:', error);
+  }
+}
+
+function loadSavedCard() {
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(SAVE_KEY) || 'null'
+    );
+
+    if (!saved || saved.game !== GAME) return null;
+
+    return saved;
+  } catch {
+    return null;
+  }
+}
+
+  let alreadyWon = false;function hash(s){let h=0;for(const c of s)h=(Math.imul(h,31)+c.charCodeAt(0))>>>0;return h}
 function seededShuffle(a,seed){let x=[...a],h=2166136261;for(const c of seed)h=Math.imul(h^c.charCodeAt(0),16777619)>>>0;for(let i=x.length-1;i>0;i--){h=(Math.imul(h,1664525)+1013904223)>>>0;const j=h%(i+1);[x[i],x[j]]=[x[j],x[i]]}return x}
 function note(id,message,error=false){$(id).textContent=message;$(id).className='live-note'+(error?' live-error':'')}
-function render(){const grid=$('grid');grid.replaceChildren();card.forEach((song,i)=>{const cell=document.createElement('button');cell.type='button';cell.className='cell'+(marks[i]?' marked':'')+(i===12?' free':'');cell.textContent=song;cell.addEventListener('click',()=>{if(i!==12){marks[i]=!marks[i];$('result').textContent='';render()}});grid.appendChild(cell)})}
+
+function render(){savePlayerCard();
+const grid=$('grid');grid.replaceChildren();card.forEach((song,i)=>{const cell=document.createElement('button');cell.type='button';cell.className='cell'+(marks[i]?' marked':'')+(i===12?' free':'');cell.textContent=song;cell.addEventListener('click',()=>{if(i!==12){
+marks[i]=!marks[i];savePlayerCard();
+$('result').textContent='';render()}});grid.appendChild(cell)})}
 function cardSeed(){return playerName+'|'+GAME+'|'+round}
 function cardNumber(){return String(hash(cardSeed())%100000).padStart(5,'0')}
 function setCard(){if(!playerName)return;const seed=cardSeed();card=seededShuffle(activeSongs,seed).slice(0,24);card.splice(12,0,'⭐ FREE SPACE ⭐');marks=Array(25).fill(false);marks[12]=true;alreadyWon=false;$('claimBtn').disabled=false;$('playerLine').textContent=playerName+' • '+GAME+' • Round '+round+' • Card #'+cardNumber();$('result').textContent='';if(unsubscribeClaim){unsubscribeClaim();unsubscribeClaim=null}render()}
@@ -143,14 +182,37 @@ try{
   unsubscribeClaim=onValue(claimRef,snap=>{
    if(submittedRound!==round)return;
    const value=snap.val();if(!value)return;
-   if(value.status==='verified'){alreadyWon = true;$('claimBtn').disabled=true;result.className='status good';result.textContent='🏆 BINGO VERIFIED! Show this result to the DJ.'}
+   if(value.status==='verified'){alreadyWon = true;savePlayerCard();$('claimBtn').disabled=true;result.className='status good';result.textContent='🏆 BINGO VERIFIED! Show this result to the DJ.'}
   else if(value.status==='rejected'){result.className='status bad';result.textContent='Not verified: '+(value.reason||'No winning line of played songs')}
    else{result.className='status';result.textContent='⏳ Claim sent! Waiting for DJ verification…'}
   },error=>{result.className='status bad';result.textContent='Unable to read claim status: '+error.message});
  }catch(error){result.className='status bad';result.textContent='Claim could not be sent: '+error.message}
  finally{claimBusy=false;$('claimBtn').disabled=alreadyWon}
 }
-function join(){if(!ready||!connected){alert('Please wait for the live connection.');return}const name=$('name').value.trim();if(!name){alert('Enter your name.');return}playerName=name;setCard();$('join').classList.add('hide');$('game').classList.remove('hide');note('liveStatus','Round '+round+' • Live feed connected • '+played.length+' songs played')}
+function join(){if(!ready||!connected){alert('Please wait for the live connection.');return}const name=$('name').value.trim();if(!name){alert('Enter your name.');return}
+const saved = loadSavedCard();
+
+playerName = name;
+setCard();
+
+if (
+  saved &&
+  saved.name === playerName &&
+  saved.round === round &&
+  Array.isArray(saved.card) &&
+  Array.isArray(saved.marks) &&
+  saved.marks.length === 25 &&
+  JSON.stringify(saved.card) === JSON.stringify(card)
+) {
+  marks = saved.marks.map(Boolean);
+  marks[12] = true;
+  alreadyWon = saved.alreadyWon === true;
+  $('claimBtn').disabled = alreadyWon;
+  render();
+}
+
+savePlayerCard();
+$('join').classList.add('hide');$('game').classList.remove('hide');note('liveStatus','Round '+round+' • Live feed connected • '+played.length+' songs played')}
 $('joinBtn').addEventListener('click',join);$('claimBtn').addEventListener('click',claim);
 const requestedCode=new URL(location.href).searchParams.get('code');
 if(requestedCode&&requestedCode.toUpperCase()!==GAME){note('connection','This build only supports '+GAME+'.',true)}
@@ -262,6 +324,24 @@ round = nextRound;
 played = Array.isArray(value?.played) ? value.played : [];
 connected = true;
 $('joinBtn').disabled = false;
+
+if (!playerName) {
+  const saved = loadSavedCard();
+
+  if (
+    saved &&
+    typeof saved.name === 'string' &&
+    saved.name.trim() &&
+    ['live', 'person'].includes(saved.mode)
+  ) {
+    $('name').value = saved.name;
+
+    chooseMode(saved.mode);
+
+    join();
+    return;
+  }
+}
 
    note('connection','Connected! Enter your name to join.');
   if(playerName&&(roundChanged||playlistChanged)){setCard();note('liveStatus','NEW GAME! Round '+round+' • Your songs changed and marks were cleared.')}
