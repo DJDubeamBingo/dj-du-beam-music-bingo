@@ -22,7 +22,60 @@
 <div id="dashboard" class="hide"><section class="panel"><div class="bigcode" id="gameCode">DUBEAM-01</div><p class="sub">Game <span id="roundNumber">1</span> • Throwback R&amp;B + Hip-Hop</p><p class="small">Permanent code and join link. Press NEXT SONG after playing that track in VirtualDJ.</p><div class="row"><button id="nextBtn" type="button">▶ NEXT SONG</button><button id="newBtn" class="secondary" type="button">✦ NEW GAME</button><button id="logoutBtn" class="secondary" type="button">SIGN OUT</button></div><div class="host-note" id="syncStatus" role="status"></div></section>
 
 
-<section class="panel" id="streamPanel">
+<section class="panel" id="accessPanel">
+
+  <h2 style="color:#f6c84c">
+    🔐 GAME ACCESS CONTROL
+  </h2>
+
+  <label for="accessMode">Game Access Mode</label>
+
+  <select id="accessMode" class="host-field">
+    <option value="free">Free Play</option>
+    <option value="round">Per Game Approval</option>
+    <option value="event">Event Pass</option>
+  </select>
+
+  <label>Current Entry Code</label>
+
+  <div class="bigcode" id="entryCode">
+    NOT GENERATED
+  </div>
+
+  <button id="generateCodeBtn" type="button" disabled>
+    🔑 GENERATE NEW CODE
+  </button>
+
+  <br><br>
+
+  <button id="saveAccessBtn" type="button" disabled>
+    SAVE ACCESS SETTINGS
+  </button>
+
+  <br><br>
+
+  <button id="lockGameBtn" class="danger" type="button" disabled>
+    🔒 LOCK GAME
+  </button>
+
+  <div id="accessStatus" class="host-note">
+    Access controls not activated yet.
+  </div>
+
+  <hr>
+
+  <h2>👥 PLAYER MANAGEMENT</h2>
+
+  <div id="playerCounts">
+    Waiting: 0 | Approved: 0
+  </div>
+
+  <div id="playerList" class="host-note">
+    No players waiting for approval.
+  </div>
+
+</section>
+  <section class="panel" id="streamPanel">
 
   <h2 style="color:#f6c84c">
     🔴 LIVE STREAM CONTROL
@@ -120,7 +173,7 @@
 <script type="module">
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import {getDatabase,ref,onValue,runTransaction,update} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
+import {getDatabase,ref,onValue,runTransaction,update,get,set} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
 const $=id=>document.getElementById(id),GAME='DUBEAM-01',songs=window.DUBEAM_SONGS,config=window.DUBEAM_FIREBASE_CONFIG;
 
 let customSongs = [];
@@ -203,8 +256,48 @@ $("loadPlaylistBtn").addEventListener(
   
 
   let auth,db,unsubscribe=null,unsubscribeClaims=null,busy=false,currentState=null,claimData={},processing=new Set(),seenClaims=new Set(),claimsLoaded=false,winnerQueue=[],winnerOpen=false;
+function generateEntryCode() {
+  const numbers = new Uint32Array(1);
+  crypto.getRandomValues(numbers);
+  return String(100000 + (numbers[0] % 900000));
+}
 
-async function saveLiveStream(remove = false) {
+$('generateCodeBtn').addEventListener('click', () => {
+  $('entryCode').textContent = generateEntryCode();
+  $('accessStatus').textContent =
+    'New code generated. Save settings to activate.';
+});
+async function saveAccessSettings() {
+  const message = $('accessStatus');
+
+  if (!auth?.currentUser || auth.currentUser.isAnonymous) {
+    message.textContent = 'Please sign in as DJ first.';
+    return;
+  }
+
+  const mode = $('accessMode').value;
+  const code = $('entryCode').textContent.trim();
+
+  if (mode !== 'free' && !/^\d{6}$/.test(code)) {
+    message.textContent = 'Generate an entry code first.';
+    return;
+  }
+
+  try {
+    await update(ref(db, `games/${GAME}/access`), {
+      mode: mode,
+      entryCode: mode === 'free' ? '' : code,
+      updatedAt: Date.now()
+    });
+
+    message.textContent = 'Access settings saved!';
+  } catch (error) {
+    message.textContent = 'Unable to save: ' + error.message;
+  }
+}
+
+$('saveAccessBtn').addEventListener('click', saveAccessSettings);
+  async function saveLiveStream(remove = false) {
   const message = $('streamStatus');
   const platform = $('streamPlatform').value;
 
@@ -413,7 +506,10 @@ async function processClaims(){if(!currentState||!auth?.currentUser||auth.curren
 function showNextWinner(){if(winnerOpen||!winnerQueue.length)return;const claim=winnerQueue.shift();winnerOpen=true;$('winnerName').textContent=String(claim.name||'Player');$('winnerDetails').textContent='Card #'+String(claim.cardNumber||'?')+' • Round '+claim.round;$('winnerOverlay').classList.remove('hide');$('winnerDismiss').focus()}
 $('winnerDismiss').addEventListener('click',()=>{$('winnerOverlay').classList.add('hide');winnerOpen=false;showNextWinner()});
 function checkNewWinners(){const round=Math.max(1,Number(currentState?.round)||1);const verified=Object.entries(claimData).filter(([,c])=>c&&c.round===round&&c.status==='verified');if(!claimsLoaded){verified.forEach(([id])=>seenClaims.add(id));claimsLoaded=true;return}for(const [id,claim] of verified){if(seenClaims.has(id))continue;seenClaims.add(id);winnerQueue.push(claim)}showNextWinner()}
-function connect(user){if(unsubscribe){unsubscribe();unsubscribe=null}if(unsubscribeClaims){unsubscribeClaims();unsubscribeClaims=null}const authorized=!!user&&!user.isAnonymous;$('loginPanel').classList.toggle('hide',authorized);$('dashboard').classList.toggle('hide',!authorized);if(!authorized){loginStatus(user?'Sign in using your DJ email/password account.':'Sign in with your DJ email and password.',!!user);if(user)signOut(auth).catch(console.error);return}unsubscribe=onValue(ref(db,`games/${GAME}/currentSong`),snap=>{draw(snap.val());status('Connected to Firebase. Ready for live song tracking.')},error=>status('Firebase read failed: '+error.message,true));unsubscribeClaims=onValue(ref(db,`games/${GAME}/claims`),snap=>{claimData=snap.val()||{};renderClaims();processClaims();checkNewWinners()},error=>{$('claimStatus').textContent='Claim feed error: '+error.message})}
+function connect(user){if(unsubscribe){unsubscribe();unsubscribe=null}if(unsubscribeClaims){unsubscribeClaims();unsubscribeClaims=null}const authorized=!!user&&!user.isAnonymous;
+
+$('generateCodeBtn').disabled = !authorized;
+$('saveAccessBtn').disabled = !authorized;$('loginPanel').classList.toggle('hide',authorized);$('dashboard').classList.toggle('hide',!authorized);if(!authorized){loginStatus(user?'Sign in using your DJ email/password account.':'Sign in with your DJ email and password.',!!user);if(user)signOut(auth).catch(console.error);return}unsubscribe=onValue(ref(db,`games/${GAME}/currentSong`),snap=>{draw(snap.val());status('Connected to Firebase. Ready for live song tracking.')},error=>status('Firebase read failed: '+error.message,true));unsubscribeClaims=onValue(ref(db,`games/${GAME}/claims`),snap=>{claimData=snap.val()||{};renderClaims();processClaims();checkNewWinners()},error=>{$('claimStatus').textContent='Claim feed error: '+error.message})}
 $('loginBtn').addEventListener('click',async()=>{$('loginBtn').disabled=true;try{await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value);$('password').value=''}catch(error){loginStatus('Sign-in failed: '+error.message,true)}finally{$('loginBtn').disabled=false}});
 
 $('markSongBtn').addEventListener('click', markSelectedSong);
